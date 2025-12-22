@@ -1,18 +1,30 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Activity } from 'lucide-react';
-import { login, initializeMockData } from '../utils/mockData';
+import { logIn } from '../services/authService';
+import { useAuth } from '../context/AuthContext';
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { refreshUserProfile } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (login(email, password)) {
-      initializeMockData();
+    setError('');
+    setLoading(true);
+
+    try {
+      await logIn(email, password);
+      await refreshUserProfile();
       navigate('/dashboard');
+    } catch (err: any) {
+      setError(err.message || 'Failed to log in. Please check your credentials.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -27,6 +39,12 @@ export function LoginPage() {
 
         <h1 className="text-3xl text-white text-center mb-8">Welcome Back</h1>
 
+        {error && (
+          <div className="mb-4 p-4 bg-red-500/10 border border-red-500/50 rounded-lg text-red-500 text-sm">
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label htmlFor="email" className="block text-zinc-400 mb-2">
@@ -40,6 +58,7 @@ export function LoginPage() {
               className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:outline-none focus:border-emerald-500 transition-colors"
               placeholder="you@example.com"
               required
+              disabled={loading}
             />
           </div>
 
@@ -55,6 +74,7 @@ export function LoginPage() {
               className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:outline-none focus:border-emerald-500 transition-colors"
               placeholder="••••••••"
               required
+              disabled={loading}
             />
           </div>
 
@@ -63,6 +83,7 @@ export function LoginPage() {
               <input
                 type="checkbox"
                 className="w-4 h-4 bg-zinc-900 border-zinc-800 rounded"
+                disabled={loading}
               />
               <span className="text-sm">Remember me</span>
             </label>
@@ -76,9 +97,10 @@ export function LoginPage() {
 
           <button
             type="submit"
-            className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors"
+            disabled={loading}
+            className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Log In
+            {loading ? 'Logging in...' : 'Log In'}
           </button>
         </form>
 

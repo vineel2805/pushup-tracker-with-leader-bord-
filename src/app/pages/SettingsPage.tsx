@@ -1,26 +1,85 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { User, Lock, Eye, EyeOff, Save } from 'lucide-react';
-import { getCurrentUser, updateCurrentUser } from '../utils/mockData';
+import { useAuth } from '../context/AuthContext';
+import { updateUserProfile } from '../services/firestoreService';
+import { changePassword } from '../services/authService';
 
 export function SettingsPage() {
-  const currentUser = getCurrentUser();
-  const [username, setUsername] = useState(currentUser?.username || '');
-  const [email, setEmail] = useState(currentUser?.email || '');
-  const [publicProfile, setPublicProfile] = useState(currentUser?.publicProfile || true);
-  const [showOnLeaderboard, setShowOnLeaderboard] = useState(currentUser?.showOnLeaderboard || true);
-  const [showGraphs, setShowGraphs] = useState(currentUser?.showGraphs || true);
+  const { currentUser, userProfile, refreshUserProfile } = useAuth();
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [publicProfile, setPublicProfile] = useState(true);
+  const [showOnLeaderboard, setShowOnLeaderboard] = useState(true);
+  const [showGraphs, setShowGraphs] = useState(true);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSave = () => {
-    if (currentUser) {
-      updateCurrentUser({
-        ...currentUser,
+  useEffect(() => {
+    if (userProfile) {
+      setUsername(userProfile.username);
+      setEmail(userProfile.email);
+      setPublicProfile(userProfile.publicProfile);
+      setShowOnLeaderboard(userProfile.showOnLeaderboard);
+      setShowGraphs(userProfile.showGraphs);
+    }
+  }, [userProfile]);
+
+  const handleSave = async () => {
+    if (!currentUser) return;
+    
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    try {
+      await updateUserProfile(currentUser.uid, {
         username,
         email,
         publicProfile,
         showOnLeaderboard,
         showGraphs,
       });
-      alert('Settings saved successfully!');
+      await refreshUserProfile();
+      setSuccess('Settings saved successfully!');
+    } catch (err: any) {
+      setError(err.message || 'Failed to save settings');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordChange = async () => {
+    if (!currentUser) return;
+
+    setError('');
+    setSuccess('');
+
+    if (newPassword !== confirmPassword) {
+      setError('New passwords do not match');
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await changePassword(currentPassword, newPassword);
+      setSuccess('Password updated successfully!');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to change password');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -30,6 +89,18 @@ export function SettingsPage() {
         <h1 className="text-3xl text-white mb-2">Settings</h1>
         <p className="text-zinc-400">Manage your account and privacy</p>
       </div>
+
+      {error && (
+        <div className="mb-4 p-4 bg-red-500/10 border border-red-500/50 rounded-lg text-red-500 text-sm">
+          {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="mb-4 p-4 bg-emerald-500/10 border border-emerald-500/50 rounded-lg text-emerald-500 text-sm">
+          {success}
+        </div>
+      )}
 
       <div className="space-y-6">
         {/* Profile Settings */}
@@ -68,7 +139,7 @@ export function SettingsPage() {
 
             <div className="flex items-center gap-4 p-4 bg-zinc-800/50 rounded-lg">
               <img
-                src={currentUser?.avatarUrl}
+                src={userProfile?.avatarUrl}
                 alt="Avatar"
                 className="w-16 h-16 rounded-full"
               />
@@ -150,8 +221,11 @@ export function SettingsPage() {
               <input
                 type="password"
                 id="current-password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
                 className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-emerald-500 transition-colors"
                 placeholder="••••••••"
+                disabled={loading}
               />
             </div>
 
@@ -162,8 +236,11 @@ export function SettingsPage() {
               <input
                 type="password"
                 id="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
                 className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-emerald-500 transition-colors"
                 placeholder="••••••••"
+                disabled={loading}
               />
             </div>
 
@@ -174,12 +251,19 @@ export function SettingsPage() {
               <input
                 type="password"
                 id="confirm-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
                 className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-emerald-500 transition-colors"
                 placeholder="••••••••"
+                disabled={loading}
               />
             </div>
 
-            <button className="px-6 py-3 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg transition-colors">
+            <button
+              onClick={handlePasswordChange}
+              disabled={loading}
+              className="px-6 py-3 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               Update Password
             </button>
           </div>
@@ -188,10 +272,11 @@ export function SettingsPage() {
         {/* Save Button */}
         <button
           onClick={handleSave}
-          className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+          disabled={loading}
+          className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Save className="w-5 h-5" />
-          Save Changes
+          {loading ? 'Saving...' : 'Save Changes'}
         </button>
       </div>
     </div>

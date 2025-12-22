@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Activity, TrendingUp, Flame, Trophy, Users } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { StatCard } from '../components/StatCard';
-import { getSessions, getFriends, getFriendSessions, getCurrentUser } from '../utils/mockData';
+import { useAuth } from '../context/AuthContext';
+import { subscribeToSessions, subscribeToFriends, getFriendSessions, Session, Friend } from '../services/firestoreService';
 import {
   getTodaysPushUps,
   getWeeklyTotal,
@@ -13,18 +14,55 @@ import {
 import { Link } from 'react-router-dom';
 
 export function DashboardPage() {
-  const [sessions, setSessions] = useState(getSessions());
-  const [friends, setFriends] = useState(getFriends());
-  const [user, setUser] = useState(getCurrentUser());
+  const { currentUser, userProfile } = useAuth();
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [friendSessions, setFriendSessions] = useState<{ [userId: string]: Session[] }>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const unsubscribeSessions = subscribeToSessions(currentUser.uid, (updatedSessions) => {
+      setSessions(updatedSessions);
+      setLoading(false);
+    });
+
+    const unsubscribeFriends = subscribeToFriends(currentUser.uid, async (updatedFriends) => {
+      setFriends(updatedFriends);
+      
+      // Fetch friend sessions
+      if (updatedFriends.length > 0) {
+        const friendIds = updatedFriends.map(f => f.id);
+        const sessions = await getFriendSessions(friendIds);
+        setFriendSessions(sessions);
+      } else {
+        setFriendSessions({});
+      }
+    });
+
+    return () => {
+      unsubscribeSessions();
+      unsubscribeFriends();
+    };
+  }, [currentUser]);
+
+  if (loading) {
+    return (
+      <div className="p-8">
+        <div className="text-white">Loading...</div>
+      </div>
+    );
+  }
+
   const last7Days = getLast7DaysData(sessions);
 
   // Calculate leaderboard (top 3 friends for this week)
-  const friendSessions = getFriendSessions();
   const leaderboard = [
     { 
-      id: user?.id || '', 
-      username: user?.username || '', 
-      avatarUrl: user?.avatarUrl || '',
+      id: currentUser?.uid || '', 
+      username: userProfile?.username || '', 
+      avatarUrl: userProfile?.avatarUrl || '',
       total: getWeeklyTotal(sessions) 
     },
     ...friends.map(friend => ({
@@ -40,7 +78,7 @@ export function DashboardPage() {
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-3xl text-white mb-2">Welcome back, {user?.username}!</h1>
+        <h1 className="text-3xl text-white mb-2">Welcome back, {userProfile?.username || 'User'}!</h1>
         <p className="text-zinc-400">Here's your fitness summary</p>
       </div>
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Square, Plus, Minus, Camera, CameraOff, RefreshCw } from 'lucide-react';
-import { addSession, getCurrentUser } from '../utils/mockData';
+import { addSession } from '../services/firestoreService';
+import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Pose, POSE_CONNECTIONS } from '@mediapipe/pose';
 import { Camera as MediaPipeCamera } from '@mediapipe/camera_utils';
@@ -48,6 +49,7 @@ export function TrackPage() {
   const pausedRef = useRef(false);
 
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
 
   useEffect(() => { trackingRef.current = isTracking; }, [isTracking]);
   useEffect(() => { pausedRef.current = isPaused; }, [isPaused]);
@@ -180,10 +182,19 @@ export function TrackPage() {
     setStateUI('get_ready');
   };
 
-  const end = () => {
-    const user = getCurrentUser();
-    if (user && count > 0) {
-      addSession({ userId: user.id, pushUps: count, duration, sets, date: new Date().toISOString().slice(0, 10) });
+  const end = async () => {
+    if (currentUser && count > 0) {
+      try {
+        await addSession({ 
+          userId: currentUser.uid, 
+          pushUps: count, 
+          duration, 
+          sets, 
+          date: new Date().toISOString().slice(0, 10) 
+        });
+      } catch (error) {
+        console.error('Error saving session:', error);
+      }
     }
     navigate('/dashboard');
   };

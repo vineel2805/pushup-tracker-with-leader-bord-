@@ -10,15 +10,20 @@ import { FriendsPage } from './pages/FriendsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { PublicProfilePage } from './pages/PublicProfilePage';
 import { Navigation } from './components/Navigation';
-import { isAuthenticated, initializeMockData } from './utils/mockData';
-
-// Initialize mock data on app load
-if (isAuthenticated()) {
-  initializeMockData();
-}
+import { AuthProvider, useAuth } from './context/AuthContext';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
-  return isAuthenticated() ? <>{children}</> : <Navigate to="/login" />;
+  const { currentUser, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-white">Loading...</div>
+      </div>
+    );
+  }
+
+  return currentUser ? <>{children}</> : <Navigate to="/login" />;
 }
 
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
@@ -32,8 +37,9 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
 
 function App() {
   return (
-    <Router>
-      <Routes>
+    <AuthProvider>
+      <Router>
+        <Routes>
         {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
@@ -106,6 +112,7 @@ function App() {
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>
+    </AuthProvider>
   );
 }
 

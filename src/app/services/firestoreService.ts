@@ -1,0 +1,409 @@
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+  limit,
+  Timestamp,
+  addDoc,
+  onSnapshot,
+  QuerySnapshot,
+  DocumentData,
+} from 'firebase/firestore';
+import { db } from '../config/firebase';
+
+// Types
+export interface User {
+  id: string;
+  username: string;
+  email: string;
+  avatarUrl: string;
+  publicProfile: boolean;
+  showOnLeaderboard: boolean;
+  showGraphs: boolean;
+  friends?: string[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface Session {
+  id: string;
+  userId: string;
+  date: string;
+  pushUps: number;
+  duration: number;
+  sets: number;
+  createdAt: Timestamp;
+}
+
+export interface Friend {
+  id: string;
+  username: string;
+  avatarUrl: string;
+}
+
+export interface FriendRequest {
+  id: string;
+  fromUserId: string;
+  fromUsername: string;
+  fromAvatarUrl: string;
+  toUserId: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  createdAt: Timestamp;
+}
+
+// User operations
+export const createUserProfile = async (userId: string, userData: Partial<User>): Promise<void> => {
+  try {
+    const userRef = doc(db, 'users', userId);
+    const userDoc = {
+      ...userData,
+      friends: [],
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    };
+    await setDoc(userRef, userDoc);
+  } catch (error: any) {
+    throw new Error(`Failed to create user profile: ${error.message}`);
+  }
+};
+
+export const getUserProfile = async (userId: string): Promise<User | null> => {
+  try {
+    const userRef = doc(db, 'users', userId);
+    const userSnap = await getDoc(userRef);
+
+    if (userSnap.exists()) {
+      return { id: userSnap.id, ...userSnap.data() } as User;
+    }
+    return null;
+  } catch (error: any) {
+    throw new Error(`Failed to get user profile: ${error.message}`);
+  }
+};
+
+export const updateUserProfile = async (userId: string, updates: Partial<User>): Promise<void> => {
+  try {
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, {
+      ...updates,
+      updatedAt: Timestamp.now(),
+    });
+  } catch (error: any) {
+    throw new Error(`Failed to update user profile: ${error.message}`);
+  }
+};
+
+export const getUserByUsername = async (username: string): Promise<User | null> => {
+  try {
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('username', '==', username), limit(1));
+    const querySnapshot = await getDocs(q);
+
+    if (!querySnapshot.empty) {
+      const doc = querySnapshot.docs[0];
+      return { id: doc.id, ...doc.data() } as User;
+    }
+    return null;
+  } catch (error: any) {
+    throw new Error(`Failed to get user by username: ${error.message}`);
+  }
+};
+
+// Session operations
+export const addSession = async (session: Omit<Session, 'id' | 'createdAt'>): Promise<string> => {
+  try {
+    const sessionsRef = collection(db, 'sessions');
+    const newSession = {
+      ...session,
+      createdAt: Timestamp.now(),
+    };
+    const docRef = await addDoc(sessionsRef, newSession);
+    return docRef.id;
+  } catch (error: any) {
+    throw new Error(`Failed to add session: ${error.message}`);
+  }
+};
+
+export const getSessions = async (userId: string): Promise<Session[]> => {
+  try {
+    const sessionsRef = collection(db, 'sessions');
+    const q = query(
+      sessionsRef,
+      where('userId', '==', userId),
+      orderBy('date', 'desc'),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+
+    return querySnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Session[];
+  } catch (error: any) {
+    throw new Error(`Failed to get sessions: ${error.message}`);
+  }
+};
+
+export const subscribeToSessions = (
+  userId: string,
+  callback: (sessions: Session[]) => void
+): (() => void) => {
+  const sessionsRef = collection(db, 'sessions');
+  const q = query(
+    sessionsRef,
+    where('userId', '==', userId),
+    orderBy('date', 'desc'),
+    orderBy('createdAt', 'desc')
+  );
+
+  return onSnapshot(
+    q,
+    (snapshot: QuerySnapshot<DocumentData>) => {
+      const sessions = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Session[];
+      callback(sessions);
+    },
+    (error) => {
+      console.error('Error subscribing to sessions:', error);
+      callback([]);
+    }
+  );
+};
+
+// Friend operations
+export const getFriends = async (userId: string): Promise<Friend[]> => {
+  try {
+    const userRef = doc(db, 'users', userId);
+    const userSnap = await getDoc(userRef);
+
+    if (!userSnap.exists()) {
+      return [];
+    }
+
+    const friendIds = userSnap.data().friends || [];
+    if (friendIds.length === 0) {
+      return [];
+    }
+
+    const friends: Friend[] = [];
+    for (const friendId of friendIds) {
+      const friendDoc = await getUserProfile(friendId);
+      if (friendDoc) {
+        friends.push({
+          id: friendDoc.id,
+          username: friendDoc.username,
+          avatarUrl: friendDoc.avatarUrl,
+        });
+      }
+    }
+
+    return friends;
+  } catch (error: any) {
+    throw new Error(`Failed to get friends: ${error.message}`);
+  }
+};
+
+export const subscribeToFriends = (
+  userId: string,
+  callback: (friends: Friend[]) => void
+): (() => void) => {
+  const userRef = doc(db, 'users', userId);
+
+  return onSnapshot(
+    userRef,
+    async (snapshot) => {
+      if (snapshot.exists()) {
+        const friendIds = snapshot.data().friends || [];
+        if (friendIds.length === 0) {
+          callback([]);
+          return;
+        }
+
+        const friends: Friend[] = [];
+        for (const friendId of friendIds) {
+          try {
+            const friendDoc = await getUserProfile(friendId);
+            if (friendDoc) {
+              friends.push({
+                id: friendDoc.id,
+                username: friendDoc.username,
+                avatarUrl: friendDoc.avatarUrl,
+              });
+            }
+          } catch (error) {
+            console.error(`Error fetching friend ${friendId}:`, error);
+          }
+        }
+        callback(friends);
+      } else {
+        callback([]);
+      }
+    },
+    (error) => {
+      console.error('Error subscribing to friends:', error);
+      callback([]);
+    }
+  );
+};
+
+export const addFriend = async (userId: string, friendId: string): Promise<void> => {
+  try {
+    const userRef = doc(db, 'users', userId);
+    const userSnap = await getDoc(userRef);
+
+    if (userSnap.exists()) {
+      const currentFriends = userSnap.data().friends || [];
+      if (!currentFriends.includes(friendId)) {
+        await updateDoc(userRef, {
+          friends: [...currentFriends, friendId],
+        });
+      }
+    }
+  } catch (error: any) {
+    throw new Error(`Failed to add friend: ${error.message}`);
+  }
+};
+
+export const removeFriend = async (userId: string, friendId: string): Promise<void> => {
+  try {
+    const userRef = doc(db, 'users', userId);
+    const userSnap = await getDoc(userRef);
+
+    if (userSnap.exists()) {
+      const currentFriends = userSnap.data().friends || [];
+      await updateDoc(userRef, {
+        friends: currentFriends.filter((id: string) => id !== friendId),
+      });
+    }
+  } catch (error: any) {
+    throw new Error(`Failed to remove friend: ${error.message}`);
+  }
+};
+
+// Friend request operations
+export const sendFriendRequest = async (
+  fromUserId: string,
+  toUserId: string,
+  fromUsername: string,
+  fromAvatarUrl: string
+): Promise<string> => {
+  try {
+    const requestsRef = collection(db, 'friendRequests');
+    const newRequest = {
+      fromUserId,
+      toUserId,
+      fromUsername,
+      fromAvatarUrl,
+      status: 'pending',
+      createdAt: Timestamp.now(),
+    };
+    const docRef = await addDoc(requestsRef, newRequest);
+    return docRef.id;
+  } catch (error: any) {
+    throw new Error(`Failed to send friend request: ${error.message}`);
+  }
+};
+
+export const getFriendRequests = async (userId: string): Promise<FriendRequest[]> => {
+  try {
+    const requestsRef = collection(db, 'friendRequests');
+    const q = query(
+      requestsRef,
+      where('toUserId', '==', userId),
+      where('status', '==', 'pending'),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+
+    return querySnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as FriendRequest[];
+  } catch (error: any) {
+    throw new Error(`Failed to get friend requests: ${error.message}`);
+  }
+};
+
+export const subscribeToFriendRequests = (
+  userId: string,
+  callback: (requests: FriendRequest[]) => void
+): (() => void) => {
+  const requestsRef = collection(db, 'friendRequests');
+  const q = query(
+    requestsRef,
+    where('toUserId', '==', userId),
+    where('status', '==', 'pending'),
+    orderBy('createdAt', 'desc')
+  );
+
+  return onSnapshot(
+    q,
+    (snapshot: QuerySnapshot<DocumentData>) => {
+      const requests = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as FriendRequest[];
+      callback(requests);
+    },
+    (error) => {
+      console.error('Error subscribing to friend requests:', error);
+      callback([]);
+    }
+  );
+};
+
+export const acceptFriendRequest = async (requestId: string, userId: string): Promise<void> => {
+  try {
+    const requestRef = doc(db, 'friendRequests', requestId);
+    const requestSnap = await getDoc(requestRef);
+
+    if (requestSnap.exists()) {
+      const requestData = requestSnap.data() as FriendRequest;
+      
+      // Update request status
+      await updateDoc(requestRef, { status: 'accepted' });
+
+      // Add to both users' friend lists
+      await addFriend(requestData.toUserId, requestData.fromUserId);
+      await addFriend(requestData.fromUserId, requestData.toUserId);
+    }
+  } catch (error: any) {
+    throw new Error(`Failed to accept friend request: ${error.message}`);
+  }
+};
+
+export const rejectFriendRequest = async (requestId: string): Promise<void> => {
+  try {
+    const requestRef = doc(db, 'friendRequests', requestId);
+    await updateDoc(requestRef, { status: 'rejected' });
+  } catch (error: any) {
+    throw new Error(`Failed to reject friend request: ${error.message}`);
+  }
+};
+
+// Get friend sessions for leaderboard
+export const getFriendSessions = async (friendIds: string[]): Promise<{ [userId: string]: Session[] }> => {
+  const result: { [userId: string]: Session[] } = {};
+  
+  for (const friendId of friendIds) {
+    try {
+      const sessions = await getSessions(friendId);
+      result[friendId] = sessions;
+    } catch (error) {
+      console.error(`Error fetching sessions for friend ${friendId}:`, error);
+      result[friendId] = [];
+    }
+  }
+  
+  return result;
+};
+

@@ -1,10 +1,24 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, Clock, TrendingUp, Filter } from 'lucide-react';
-import { getSessions } from '../utils/mockData';
+import { useAuth } from '../context/AuthContext';
+import { subscribeToSessions, Session } from '../services/firestoreService';
 
 export function HistoryPage() {
-  const [sessions, setSessions] = useState(getSessions());
+  const { currentUser } = useAuth();
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'week' | 'month'>('all');
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const unsubscribe = subscribeToSessions(currentUser.uid, (updatedSessions) => {
+      setSessions(updatedSessions);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
 
   const filteredSessions = sessions.filter(session => {
     if (filter === 'all') return true;
@@ -51,6 +65,14 @@ export function HistoryPage() {
     const secs = seconds % 60;
     return `${mins}m ${secs}s`;
   };
+
+  if (loading) {
+    return (
+      <div className="p-8">
+        <div className="text-white">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8">

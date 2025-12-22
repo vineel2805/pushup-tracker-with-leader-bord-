@@ -1,15 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Users, TrendingUp, TrendingDown, Trophy, Flame, Target, UserPlus, Check, X } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import {
-  getSessions,
-  getFriends,
+  subscribeToSessions,
+  subscribeToFriends,
+  subscribeToFriendRequests,
   getFriendSessions,
-  getFriendRequests,
   acceptFriendRequest,
   rejectFriendRequest,
   removeFriend,
-  getCurrentUser,
-} from '../utils/mockData';
+  sendFriendRequest,
+  Session,
+  Friend,
+  FriendRequest,
+} from '../services/firestoreService';
 import {
   getWeeklyTotal,
   getMonthlyTotal,
@@ -22,23 +26,80 @@ type LeaderboardType = 'weekly' | 'monthly' | 'best' | 'streak';
 type TimeRange = 'week' | 'month' | 'all';
 
 export function FriendsPage() {
+  const { currentUser, userProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<'leaderboard' | 'friends'>('leaderboard');
   const [leaderboardType, setLeaderboardType] = useState<LeaderboardType>('weekly');
   const [timeRange, setTimeRange] = useState<TimeRange>('week');
-  
-  const sessions = getSessions();
-  const friends = getFriends();
-  const friendRequests = getFriendRequests();
-  const friendSessions = getFriendSessions();
-  const user = getCurrentUser();
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+  const [friendSessions, setFriendSessions] = useState<{ [userId: string]: Session[] }>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const unsubscribeSessions = subscribeToSessions(currentUser.uid, (updatedSessions) => {
+      setSessions(updatedSessions);
+    });
+
+    const unsubscribeFriends = subscribeToFriends(currentUser.uid, async (updatedFriends) => {
+      setFriends(updatedFriends);
+      
+      if (updatedFriends.length > 0) {
+        const friendIds = updatedFriends.map(f => f.id);
+        const sessions = await getFriendSessions(friendIds);
+        setFriendSessions(sessions);
+      } else {
+        setFriendSessions({});
+      }
+    });
+
+    const unsubscribeRequests = subscribeToFriendRequests(currentUser.uid, (requests) => {
+      setFriendRequests(requests);
+      setLoading(false);
+    });
+
+    return () => {
+      unsubscribeSessions();
+      unsubscribeFriends();
+      unsubscribeRequests();
+    };
+  }, [currentUser]);
+
+  const handleAcceptRequest = async (requestId: string) => {
+    if (!currentUser) return;
+    try {
+      await acceptFriendRequest(requestId, currentUser.uid);
+    } catch (error) {
+      console.error('Error accepting friend request:', error);
+    }
+  };
+
+  const handleRejectRequest = async (requestId: string) => {
+    try {
+      await rejectFriendRequest(requestId);
+    } catch (error) {
+      console.error('Error rejecting friend request:', error);
+    }
+  };
+
+  const handleRemoveFriend = async (friendId: string) => {
+    if (!currentUser) return;
+    try {
+      await removeFriend(currentUser.uid, friendId);
+    } catch (error) {
+      console.error('Error removing friend:', error);
+    }
+  };
 
   // Calculate leaderboard data
   const getLeaderboardData = () => {
     const allUsers = [
       {
-        id: user?.id || '',
-        username: user?.username || '',
-        avatarUrl: user?.avatarUrl || '',
+        id: currentUser?.uid || '',
+        username: userProfile?.username || '',
+        avatarUrl: userProfile?.avatarUrl || '',
         sessions: sessions,
       },
       ...friends.map(friend => ({
@@ -229,7 +290,7 @@ export function FriendsPage() {
                     {/* Username */}
                     <div className="flex-1">
                       <p className="text-white">{item.username}</p>
-                      {item.id === user?.id && (
+                      {item.id === currentUser?.uid && (
                         <span className="text-xs text-emerald-500">You</span>
                       )}
                     </div>
@@ -292,13 +353,13 @@ export function FriendsPage() {
                       </div>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => acceptFriendRequest(request.id)}
+                          onClick={() => handleAcceptRequest(request.id)}
                           className="p-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg transition-colors"
                         >
                           <Check className="w-5 h-5 text-white" />
                         </button>
                         <button
-                          onClick={() => rejectFriendRequest(request.id)}
+                          onClick={() => handleRejectRequest(request.id)}
                           className="p-2 bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
                         >
                           <X className="w-5 h-5 text-white" />
@@ -344,7 +405,7 @@ export function FriendsPage() {
                       </div>
                     </div>
                     <button
-                      onClick={() => removeFriend(friend.id)}
+                      onClick={() => handleRemoveFriend(friend.id)}
                       className="px-4 py-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                     >
                       Remove

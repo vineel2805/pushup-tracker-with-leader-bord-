@@ -1,12 +1,34 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { getSessions } from '../utils/mockData';
+import { useAuth } from '../context/AuthContext';
+import { subscribeToSessions, Session } from '../services/firestoreService';
 import { getLast7DaysData, getLast30DaysData } from '../utils/stats';
 
 export function AnalyticsPage() {
+  const { currentUser } = useAuth();
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<'week' | 'month'>('week');
-  const sessions = getSessions();
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const unsubscribe = subscribeToSessions(currentUser.uid, (updatedSessions) => {
+      setSessions(updatedSessions);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
   
+  if (loading) {
+    return (
+      <div className="p-8">
+        <div className="text-white">Loading...</div>
+      </div>
+    );
+  }
+
   const data = timeRange === 'week' ? getLast7DaysData(sessions) : getLast30DaysData(sessions);
 
   // Session-to-session data (last 10 sessions)

@@ -1,15 +1,18 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Home, Activity, History, TrendingUp, Users, Settings, LogOut } from 'lucide-react';
-import { logout } from '../utils/mockData';
-import { useNavigate } from 'react-router-dom';
+import { logOut } from '../services/authService';
 
 export function Navigation() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    logout();
-    navigate('/');
+  const handleLogout = async () => {
+    try {
+      await logOut();
+      navigate('/');
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
   };
 
   const navItems = [
