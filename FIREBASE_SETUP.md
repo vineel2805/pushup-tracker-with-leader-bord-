@@ -111,7 +111,6 @@ For optimal performance, create composite indexes in Firestore:
 - Collection: `sessions`
 - Fields:
   - `userId` (Ascending)
-  - `date` (Descending)
   - `createdAt` (Descending)
 
 **Index 2: Friend Requests Query**

@@ -137,7 +137,6 @@ export const getSessions = async (userId: string): Promise<Session[]> => {
     const q = query(
       sessionsRef,
       where('userId', '==', userId),
-      orderBy('date', 'desc'),
       orderBy('createdAt', 'desc')
     );
     const querySnapshot = await getDocs(q);
@@ -159,7 +158,6 @@ export const subscribeToSessions = (
   const q = query(
     sessionsRef,
     where('userId', '==', userId),
-    orderBy('date', 'desc'),
     orderBy('createdAt', 'desc')
   );
 
