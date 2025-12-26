@@ -82,6 +82,27 @@ export function DashboardPage() {
         <p className="text-zinc-400">Here's your fitness summary</p>
       </div>
 
+      {/* Profile Section */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-8">
+        <div className="flex items-start gap-4">
+          <img
+            src={userProfile?.avatarUrl}
+            alt={userProfile?.username}
+            className="w-20 h-20 rounded-full"
+          />
+          <div className="flex-1">
+            <h2 className="text-2xl text-white mb-1">{userProfile?.username || 'User'}</h2>
+            <p className="text-zinc-400 mb-3">{userProfile?.email || ''}</p>
+            {userProfile?.bio && (
+              <p className="text-zinc-300 text-sm leading-relaxed">{userProfile.bio}</p>
+            )}
+            {!userProfile?.bio && (
+              <p className="text-zinc-500 text-sm italic">No bio yet. Add one in your settings!</p>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <StatCard

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, TrendingUp, TrendingDown, Trophy, Flame, Target, UserPlus, Check, X } from 'lucide-react';
+import { Users, TrendingUp, TrendingDown, Trophy, Flame, Target, UserPlus, Check, X, Search, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
   subscribeToSessions,
@@ -10,9 +10,12 @@ import {
   rejectFriendRequest,
   removeFriend,
   sendFriendRequest,
+  searchUsersByUsername,
+  getFriendSuggestions,
   Session,
   Friend,
   FriendRequest,
+  User,
 } from '../services/firestoreService';
 import {
   getWeeklyTotal,
@@ -21,6 +24,14 @@ import {
   getLongestStreak,
   getLifetimeTotal,
 } from '../utils/stats';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '../components/ui/dialog';
+import { Input } from '../components/ui/input';
 
 type LeaderboardType = 'weekly' | 'monthly' | 'best' | 'streak';
 type TimeRange = 'week' | 'month' | 'all';
@@ -35,6 +46,16 @@ export function FriendsPage() {
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
   const [friendSessions, setFriendSessions] = useState<{ [userId: string]: Session[] }>({});
   const [loading, setLoading] = useState(true);
+  
+  // New state for search and suggestions
+  const [showSearchDialog, setShowSearchDialog] = useState(false);
+  const [showSuggestionsDialog, setShowSuggestionsDialog] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<User[]>([]);
+  const [suggestions, setSuggestions] = useState<User[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!currentUser) return;
@@ -66,6 +87,77 @@ export function FriendsPage() {
       unsubscribeRequests();
     };
   }, [currentUser]);
+
+  // Load suggestions when dialog opens
+  useEffect(() => {
+    if (showSuggestionsDialog && currentUser) {
+      loadSuggestions();
+    }
+  }, [showSuggestionsDialog, currentUser]);
+
+  const loadSuggestions = async () => {
+    if (!currentUser) return;
+    setLoadingSuggestions(true);
+    try {
+      const userSuggestions = await getFriendSuggestions(currentUser.uid, 10);
+      setSuggestions(userSuggestions);
+    } catch (error) {
+      console.error('Error loading suggestions:', error);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  };
+
+  const handleSearch = async (query: string) => {
+    if (!currentUser || !query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setSearching(true);
+    try {
+      const results = await searchUsersByUsername(query.trim(), currentUser.uid, 10);
+      setSearchResults(results);
+    } catch (error) {
+      console.error('Error searching users:', error);
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSendFriendRequest = async (toUserId: string, toUsername: string, toAvatarUrl: string) => {
+    if (!currentUser || !userProfile) return;
+
+    try {
+      setPendingRequests(prev => new Set(prev).add(toUserId));
+      await sendFriendRequest(
+        currentUser.uid,
+        toUserId,
+        userProfile.username,
+        userProfile.avatarUrl
+      );
+    } catch (error) {
+      console.error('Error sending friend request:', error);
+      alert('Failed to send friend request. Please try again.');
+    } finally {
+      setPendingRequests(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(toUserId);
+        return newSet;
+      });
+    }
+  };
+
+  const isAlreadyFriend = (userId: string) => {
+    return friends.some(f => f.id === userId);
+  };
+
+  const hasPendingRequest = (userId: string) => {
+    return friendRequests.some(r => 
+      (r.fromUserId === userId || r.toUserId === userId) && r.status === 'pending'
+    );
+  };
 
   const handleAcceptRequest = async (requestId: string) => {
     if (!currentUser) return;
@@ -375,10 +467,22 @@ export function FriendsPage() {
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl text-white">Your Friends</h2>
-              <button className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors flex items-center gap-2">
-                <UserPlus className="w-4 h-4" />
-                Add Friend
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowSuggestionsDialog(true)}
+                  className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <Users className="w-4 h-4" />
+                  Find Friends
+                </button>
+                <button
+                  onClick={() => setShowSearchDialog(true)}
+                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Add Friend
+                </button>
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -419,14 +523,150 @@ export function FriendsPage() {
               <div className="text-center py-12">
                 <Users className="w-16 h-16 text-zinc-700 mx-auto mb-4" />
                 <p className="text-zinc-400 mb-4">No friends yet</p>
-                <button className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors">
-                  Find Friends
-                </button>
+                <div className="flex gap-2 justify-center">
+                  <button
+                    onClick={() => setShowSuggestionsDialog(true)}
+                    className="px-6 py-3 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg transition-colors"
+                  >
+                    Find Friends
+                  </button>
+                  <button
+                    onClick={() => setShowSearchDialog(true)}
+                    className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors"
+                  >
+                    Search by Username
+                  </button>
+                </div>
               </div>
             )}
           </div>
         </>
       )}
+
+      {/* Search Dialog */}
+      <Dialog open={showSearchDialog} onOpenChange={setShowSearchDialog}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white">Search Users</DialogTitle>
+            <DialogDescription className="text-zinc-400">
+              Search for users by username
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-zinc-400" />
+              <Input
+                type="text"
+                placeholder="Enter username..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  handleSearch(e.target.value);
+                }}
+                className="pl-10 bg-zinc-800 border-zinc-700 text-white"
+              />
+            </div>
+            {searching && (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
+              </div>
+            )}
+            {!searching && searchResults.length > 0 && (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {searchResults.map((user) => (
+                  <div
+                    key={user.id}
+                    className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg"
+                  >
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={user.avatarUrl}
+                        alt={user.username}
+                        className="w-10 h-10 rounded-full"
+                      />
+                      <div>
+                        <p className="text-white">{user.username}</p>
+                        <p className="text-xs text-zinc-400">{user.email}</p>
+                      </div>
+                    </div>
+                    {isAlreadyFriend(user.id) ? (
+                      <span className="text-sm text-zinc-500">Already friends</span>
+                    ) : hasPendingRequest(user.id) ? (
+                      <span className="text-sm text-zinc-500">Request sent</span>
+                    ) : (
+                      <button
+                        onClick={() => handleSendFriendRequest(user.id, user.username, user.avatarUrl)}
+                        disabled={pendingRequests.has(user.id)}
+                        className="px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors text-sm disabled:opacity-50"
+                      >
+                        {pendingRequests.has(user.id) ? 'Sending...' : 'Add'}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {!searching && searchQuery && searchResults.length === 0 && (
+              <p className="text-center text-zinc-400 py-4">No users found</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Suggestions Dialog */}
+      <Dialog open={showSuggestionsDialog} onOpenChange={setShowSuggestionsDialog}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white">Friend Suggestions</DialogTitle>
+            <DialogDescription className="text-zinc-400">
+              People you might know
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {loadingSuggestions ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
+              </div>
+            ) : suggestions.length > 0 ? (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {suggestions.map((user) => (
+                  <div
+                    key={user.id}
+                    className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg"
+                  >
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={user.avatarUrl}
+                        alt={user.username}
+                        className="w-10 h-10 rounded-full"
+                      />
+                      <div>
+                        <p className="text-white">{user.username}</p>
+                        <p className="text-xs text-zinc-400">{user.email}</p>
+                      </div>
+                    </div>
+                    {isAlreadyFriend(user.id) ? (
+                      <span className="text-sm text-zinc-500">Already friends</span>
+                    ) : hasPendingRequest(user.id) ? (
+                      <span className="text-sm text-zinc-500">Request sent</span>
+                    ) : (
+                      <button
+                        onClick={() => handleSendFriendRequest(user.id, user.username, user.avatarUrl)}
+                        disabled={pendingRequests.has(user.id)}
+                        className="px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors text-sm disabled:opacity-50"
+                      >
+                        {pendingRequests.has(user.id) ? 'Sending...' : 'Add'}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-center text-zinc-400 py-8">No suggestions available</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

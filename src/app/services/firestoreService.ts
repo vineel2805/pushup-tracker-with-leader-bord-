@@ -24,6 +24,7 @@ export interface User {
   username: string;
   email: string;
   avatarUrl: string;
+  bio?: string;
   publicProfile: boolean;
   showOnLeaderboard: boolean;
   showGraphs: boolean;
@@ -61,6 +62,14 @@ export interface FriendRequest {
 // User operations
 export const createUserProfile = async (userId: string, userData: Partial<User>): Promise<void> => {
   try {
+    // Check if username already exists
+    if (userData.username) {
+      const existingUser = await getUserByUsername(userData.username);
+      if (existingUser && existingUser.id !== userId) {
+        throw new Error('Username already exists. Please choose a different username.');
+      }
+    }
+
     const userRef = doc(db, 'users', userId);
     const userDoc = {
       ...userData,
@@ -70,6 +79,10 @@ export const createUserProfile = async (userId: string, userData: Partial<User>)
     };
     await setDoc(userRef, userDoc);
   } catch (error: any) {
+    // Re-throw with original message if it's our custom error
+    if (error.message.includes('already exists')) {
+      throw error;
+    }
     throw new Error(`Failed to create user profile: ${error.message}`);
   }
 };
@@ -113,6 +126,88 @@ export const getUserByUsername = async (username: string): Promise<User | null> 
     return null;
   } catch (error: any) {
     throw new Error(`Failed to get user by username: ${error.message}`);
+  }
+};
+
+export const checkUsernameExists = async (username: string): Promise<boolean> => {
+  try {
+    const user = await getUserByUsername(username);
+    return user !== null;
+  } catch (error: any) {
+    throw new Error(`Failed to check username: ${error.message}`);
+  }
+};
+
+export const searchUsersByUsername = async (
+  searchQuery: string,
+  currentUserId: string,
+  limitCount: number = 10
+): Promise<User[]> => {
+  try {
+    if (!searchQuery || searchQuery.trim().length === 0) {
+      return [];
+    }
+
+    const usersRef = collection(db, 'users');
+    // Firestore prefix search - case sensitive
+    // For case-insensitive, you'd need to store a lowercase version
+    const q = query(
+      usersRef,
+      where('username', '>=', searchQuery),
+      where('username', '<=', searchQuery + '\uf8ff'),
+      limit(limitCount)
+    );
+    const querySnapshot = await getDocs(q);
+
+    const users: User[] = [];
+    querySnapshot.forEach((doc) => {
+      const userData = { id: doc.id, ...doc.data() } as User;
+      // Exclude current user from results
+      if (userData.id !== currentUserId) {
+        users.push(userData);
+      }
+    });
+
+    return users;
+  } catch (error: any) {
+    throw new Error(`Failed to search users: ${error.message}`);
+  }
+};
+
+export const getFriendSuggestions = async (
+  currentUserId: string,
+  limitCount: number = 10
+): Promise<User[]> => {
+  try {
+    // Get current user's friends
+    const currentUser = await getUserProfile(currentUserId);
+    if (!currentUser) {
+      return [];
+    }
+
+    const friendIds = currentUser.friends || [];
+    const allFriendIds = new Set([...friendIds, currentUserId]);
+
+    // Get all users
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, limit(limitCount * 3)); // Get more to filter
+    const querySnapshot = await getDocs(q);
+
+    const suggestions: User[] = [];
+    querySnapshot.forEach((doc) => {
+      const userData = { id: doc.id, ...doc.data() } as User;
+      // Exclude current user and existing friends
+      if (!allFriendIds.has(userData.id) && userData.publicProfile !== false) {
+        suggestions.push(userData);
+      }
+      if (suggestions.length >= limitCount) {
+        return;
+      }
+    });
+
+    return suggestions.slice(0, limitCount);
+  } catch (error: any) {
+    throw new Error(`Failed to get friend suggestions: ${error.message}`);
   }
 };
 

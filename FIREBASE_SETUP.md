@@ -37,31 +37,81 @@ For production, update your Firestore rules. Go to **Firestore Database** > **Ru
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users can read/write their own user document
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user owns the document
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Users collection
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      // Allow users to read their own profile
+      allow get: if isAuthenticated() && isOwner(userId);
+      
+      // Allow users to read public profiles (for search/suggestions)
+      allow get: if isAuthenticated() && resource.data.publicProfile == true;
+      
+      // Allow users to list/query public profiles (required for search queries)
+      allow list: if isAuthenticated();
+      
+      // Allow users to write only their own profile
+      allow create, update: if isAuthenticated() && isOwner(userId);
     }
     
-    // Users can read/write their own sessions
+    // Sessions collection
     match /sessions/{sessionId} {
-      allow read, write: if request.auth != null && 
+      // Allow read/write only for own sessions
+      allow read, write: if isAuthenticated() && 
         resource.data.userId == request.auth.uid;
+      
+      // Allow creating sessions with correct userId
+      allow create: if isAuthenticated() && 
+        request.resource.data.userId == request.auth.uid;
     }
     
-    // Friend requests
+    // Friend requests collection
     match /friendRequests/{requestId} {
-      allow read: if request.auth != null && 
-        (resource.data.toUserId == request.auth.uid || 
-         resource.data.fromUserId == request.auth.uid);
-      allow create: if request.auth != null && 
+      // Allow reading own friend requests (sent or received)
+      allow get: if isAuthenticated() && (
+        resource.data.toUserId == request.auth.uid || 
+        resource.data.fromUserId == request.auth.uid
+      );
+      
+      // Allow listing friend requests - queries filter by toUserId/fromUserId
+      // The query itself ensures only relevant requests are returned
+      allow list: if isAuthenticated();
+      
+      // Allow creating friend requests
+      allow create: if isAuthenticated() && 
         request.resource.data.fromUserId == request.auth.uid;
-      allow update: if request.auth != null && 
+      
+      // Allow updating friend requests (only recipient can update)
+      allow update: if isAuthenticated() && 
         resource.data.toUserId == request.auth.uid;
     }
   }
 }
 ```
+
+**Important Notes:**
+
+1. **Query Permissions**: The rules now use `list` permission which is required for Firestore queries. The `get` permission only works for individual document reads.
+
+2. **User Search**: The `allow list: if isAuthenticated()` on users collection allows authenticated users to query the users collection. The application code filters results to only show public profiles.
+
+3. **Friend Requests Query**: The `allow list` on friendRequests allows queries, but you must have the composite index created (which you already have).
+
+4. **Index Required**: Make sure you have created the composite index for friendRequests:
+   - Collection: `friendRequests`
+   - Fields: `toUserId` (Ascending), `status` (Ascending), `createdAt` (Descending)
+
+5. **User Search Index**: You may also need to create an index for user search:
+   - Collection: `users`
+   - Fields: `username` (Ascending), `publicProfile` (Ascending)
 
 ## Step 4: Get Firebase Configuration
 

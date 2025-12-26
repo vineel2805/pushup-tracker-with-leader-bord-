@@ -35,11 +35,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         let profile = await getUserProfile(currentUser.uid);
         
         // Create profile if it doesn't exist
-        if (!profile && currentUser.displayName && currentUser.email) {
+        if (!profile && currentUser.email) {
+          const username = currentUser.displayName || currentUser.email.split('@')[0];
           await createUserProfile(currentUser.uid, {
-            username: currentUser.displayName,
+            username: username,
             email: currentUser.email,
-            avatarUrl: currentUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.displayName}`,
+            bio: '',
+            avatarUrl: currentUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
             publicProfile: true,
             showOnLeaderboard: true,
             showGraphs: true,

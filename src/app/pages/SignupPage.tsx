@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Activity } from 'lucide-react';
 import { signUp } from '../services/authService';
-import { createUserProfile } from '../services/firestoreService';
+import { createUserProfile, checkUsernameExists } from '../services/firestoreService';
 import { useAuth } from '../context/AuthContext';
 
 export function SignupPage() {
@@ -10,9 +10,32 @@ export function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [usernameError, setUsernameError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [checkingUsername, setCheckingUsername] = useState(false);
   const navigate = useNavigate();
   const { refreshUserProfile } = useAuth();
+
+  const handleUsernameBlur = async () => {
+    if (!username.trim()) {
+      setUsernameError('');
+      return;
+    }
+
+    setCheckingUsername(true);
+    setUsernameError('');
+    
+    try {
+      const exists = await checkUsernameExists(username.trim());
+      if (exists) {
+        setUsernameError('Username already exists. Please choose a different username.');
+      }
+    } catch (err: any) {
+      setUsernameError(err.message || 'Error checking username');
+    } finally {
+      setCheckingUsername(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,13 +43,22 @@ export function SignupPage() {
     setLoading(true);
 
     try {
+      // Double-check username before creating account
+      const exists = await checkUsernameExists(username.trim());
+      if (exists) {
+        setError('Username already exists. Please choose a different username.');
+        setLoading(false);
+        return;
+      }
+
       // Create auth user
       const authUser = await signUp(email, password, username);
       
       // Create user profile in Firestore
       await createUserProfile(authUser.uid, {
-        username,
+        username: username.trim(),
         email,
+        bio: '',
         avatarUrl: authUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
         publicProfile: true,
         showOnLeaderboard: true,
@@ -68,12 +100,29 @@ export function SignupPage() {
               type="text"
               id="username"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:outline-none focus:border-emerald-500 transition-colors"
+              onChange={(e) => {
+                setUsername(e.target.value);
+                setUsernameError('');
+              }}
+              onBlur={handleUsernameBlur}
+              className={`w-full px-4 py-3 bg-zinc-900 border rounded-lg text-white focus:outline-none transition-colors ${
+                usernameError
+                  ? 'border-red-500 focus:border-red-500'
+                  : 'border-zinc-800 focus:border-emerald-500'
+              }`}
               placeholder="fitguru123"
               required
-              disabled={loading}
+              disabled={loading || checkingUsername}
             />
+            {checkingUsername && (
+              <p className="text-xs text-zinc-500 mt-1">Checking availability...</p>
+            )}
+            {usernameError && (
+              <p className="text-xs text-red-500 mt-1">{usernameError}</p>
+            )}
+            {!usernameError && !checkingUsername && username && (
+              <p className="text-xs text-emerald-500 mt-1">Username available</p>
+            )}
           </div>
 
           <div>

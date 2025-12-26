@@ -8,6 +8,7 @@ export function SettingsPage() {
   const { currentUser, userProfile, refreshUserProfile } = useAuth();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
+  const [bio, setBio] = useState('');
   const [publicProfile, setPublicProfile] = useState(true);
   const [showOnLeaderboard, setShowOnLeaderboard] = useState(true);
   const [showGraphs, setShowGraphs] = useState(true);
@@ -22,6 +23,7 @@ export function SettingsPage() {
     if (userProfile) {
       setUsername(userProfile.username);
       setEmail(userProfile.email);
+      setBio(userProfile.bio || '');
       setPublicProfile(userProfile.publicProfile);
       setShowOnLeaderboard(userProfile.showOnLeaderboard);
       setShowGraphs(userProfile.showGraphs);
@@ -39,6 +41,7 @@ export function SettingsPage() {
       await updateUserProfile(currentUser.uid, {
         username,
         email,
+        bio,
         publicProfile,
         showOnLeaderboard,
         showGraphs,
@@ -135,6 +138,22 @@ export function SettingsPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-emerald-500 transition-colors"
               />
+            </div>
+
+            <div>
+              <label htmlFor="bio" className="block text-zinc-400 mb-2">
+                Bio
+              </label>
+              <textarea
+                id="bio"
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                placeholder="Tell us about yourself..."
+                maxLength={500}
+                rows={4}
+                className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-emerald-500 transition-colors resize-none"
+              />
+              <p className="text-xs text-zinc-500 mt-1">{bio.length}/500 characters</p>
             </div>
 
             <div className="flex items-center gap-4 p-4 bg-zinc-800/50 rounded-lg">
