@@ -8,6 +8,9 @@ import {
   updatePassword,
   reauthenticateWithCredential,
   EmailAuthProvider,
+  GoogleAuthProvider,
+  signInWithPopup,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import { auth } from '../config/firebase';
 
@@ -95,5 +98,30 @@ export const getCurrentAuthUser = (): User | null => {
 
 export const onAuthStateChange = (callback: (user: User | null) => void) => {
   return onAuthStateChanged(auth, callback);
+};
+
+export const signInWithGoogle = async (): Promise<AuthUser> => {
+  try {
+    const provider = new GoogleAuthProvider();
+    const userCredential = await signInWithPopup(auth, provider);
+    const user = userCredential.user;
+
+    return {
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName,
+      photoURL: user.photoURL,
+    };
+  } catch (error: any) {
+    throw new Error(error.message || 'Failed to sign in with Google');
+  }
+};
+
+export const resetPassword = async (email: string): Promise<void> => {
+  try {
+    await sendPasswordResetEmail(auth, email);
+  } catch (error: any) {
+    throw new Error(error.message || 'Failed to send password reset email');
+  }
 };
 

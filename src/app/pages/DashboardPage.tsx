@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Activity, TrendingUp, Flame, Trophy, Users } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { StatCard } from '../components/StatCard';
+import { InitialsAvatar } from '../components/InitialsAvatar';
 import { useAuth } from '../context/AuthContext';
 import { subscribeToSessions, subscribeToFriends, getFriendSessions, Session, Friend } from '../services/firestoreService';
 import {
@@ -85,11 +86,15 @@ export function DashboardPage() {
       {/* Profile Section */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-8">
         <div className="flex items-start gap-4">
-          <img
-            src={userProfile?.avatarUrl}
-            alt={userProfile?.username}
-            className="w-20 h-20 rounded-full"
-          />
+          {userProfile?.avatarUrl ? (
+            <img
+              src={userProfile.avatarUrl}
+              alt={userProfile.username}
+              className="w-20 h-20 rounded-full object-cover"
+            />
+          ) : (
+            <InitialsAvatar name={userProfile?.username || 'User'} size={80} className="w-20 h-20 rounded-full" />
+          )}
           <div className="flex-1">
             <h2 className="text-2xl text-white mb-1">{userProfile?.username || 'User'}</h2>
             <p className="text-zinc-400 mb-3">{userProfile?.email || ''}</p>
@@ -192,11 +197,15 @@ export function DashboardPage() {
                 }`}>
                   {index + 1}
                 </div>
-                <img
-                  src={item.avatarUrl}
-                  alt={item.username}
-                  className="w-10 h-10 rounded-full"
-                />
+                {item.avatarUrl ? (
+                  <img
+                    src={item.avatarUrl}
+                    alt={item.username}
+                    className="w-10 h-10 rounded-full object-cover"
+                  />
+                ) : (
+                  <InitialsAvatar name={item.username} size={40} className="w-10 h-10 rounded-full" />
+                )}
                 <div className="flex-1">
                   <p className="text-white text-sm">{item.username}</p>
                   <p className="text-zinc-400 text-xs">This week</p>

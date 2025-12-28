@@ -29,24 +29,25 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const refreshUserProfile = async () => {
-    if (currentUser) {
+  const refreshUserProfile = async (user?: FirebaseUser) => {
+    const userToCheck = user || currentUser;
+    if (userToCheck) {
       try {
-        let profile = await getUserProfile(currentUser.uid);
+        let profile = await getUserProfile(userToCheck.uid);
         
-        // Create profile if it doesn't exist
-        if (!profile && currentUser.email) {
-          const username = currentUser.displayName || currentUser.email.split('@')[0];
-          await createUserProfile(currentUser.uid, {
+        // Create profile if it doesn't exist (only for new users)
+        if (!profile && userToCheck.email) {
+          const username = userToCheck.displayName || userToCheck.email.split('@')[0];
+          await createUserProfile(userToCheck.uid, {
             username: username,
-            email: currentUser.email,
+            email: userToCheck.email,
             bio: '',
-            avatarUrl: currentUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
+            avatarUrl: userToCheck.photoURL || null,
             publicProfile: true,
             showOnLeaderboard: true,
             showGraphs: true,
           });
-          profile = await getUserProfile(currentUser.uid);
+          profile = await getUserProfile(userToCheck.uid);
         }
         
         setUserProfile(profile);
@@ -65,7 +66,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       setLoading(true);
 
       if (user) {
-        await refreshUserProfile();
+        await refreshUserProfile(user);
       } else {
         setUserProfile(null);
       }

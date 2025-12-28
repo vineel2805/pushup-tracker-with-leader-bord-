@@ -1,16 +1,43 @@
+import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Trophy, Flame, TrendingUp, UserPlus } from 'lucide-react';
-import { getSessions } from '../utils/mockData';
+import { getUserByUsername, subscribeToSessions, Session } from '../services/firestoreService';
+import { InitialsAvatar } from '../components/InitialsAvatar';
 import { getLifetimeTotal, getBestSession, getLongestStreak, getLast7DaysData } from '../utils/stats';
 
 export function PublicProfilePage() {
-  // In a real app, this would fetch data for a specific user
-  // For demo, we'll use the current user's data
-  const sessions = getSessions();
+  const { username } = useParams<{ username: string }>();
+  const [profile, setProfile] = useState<any>(null);
+  const [sessions, setSessions] = useState<Session[]>([]);
+
+  useEffect(() => {
+    if (!username) return;
+
+    const loadProfile = async () => {
+      const userProfile = await getUserByUsername(username);
+      setProfile(userProfile);
+      
+      if (userProfile) {
+        const unsubscribe = subscribeToSessions(userProfile.id, (updatedSessions) => {
+          setSessions(updatedSessions);
+        });
+        return unsubscribe;
+      }
+    };
+
+    loadProfile();
+  }, [username]);
+
+  if (!profile) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <p className="text-zinc-400">Loading profile...</p>
+      </div>
+    );
+  }
+
   const last7Days = getLast7DaysData(sessions);
-  
-  const username = 'FitGuru';
-  const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=FitGuru`;
 
   return (
     <div className="min-h-screen bg-black">
@@ -18,13 +45,19 @@ export function PublicProfilePage() {
       <div className="border-b border-zinc-800 bg-zinc-950/50 backdrop-blur-sm">
         <div className="max-w-5xl mx-auto px-6 py-8">
           <div className="flex items-center gap-6">
-            <img
-              src={avatarUrl}
-              alt={username}
-              className="w-24 h-24 rounded-full border-4 border-emerald-500"
-            />
+            {profile.avatarUrl ? (
+              <img
+                src={profile.avatarUrl}
+                alt={profile.username || 'User'}
+                className="w-24 h-24 rounded-full border-4 border-emerald-500 object-cover"
+              />
+            ) : (
+              <div className="w-24 h-24 rounded-full border-4 border-emerald-500 overflow-hidden">
+                <InitialsAvatar name={profile.username || 'User'} size={96} className="w-24 h-24 rounded-full" />
+              </div>
+            )}
             <div className="flex-1">
-              <h1 className="text-4xl text-white mb-2">{username}</h1>
+              <h1 className="text-4xl text-white mb-2">{profile.username || 'User'}</h1>
               <p className="text-zinc-400">Push-up enthusiast • Active for 3 months</p>
             </div>
             <button className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors flex items-center gap-2">

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Users, TrendingUp, TrendingDown, Trophy, Flame, Target, UserPlus, Check, X, Search, Loader2 } from 'lucide-react';
+import { InitialsAvatar } from '../components/InitialsAvatar';
 import { useAuth } from '../context/AuthContext';
 import {
   subscribeToSessions,
@@ -373,11 +374,15 @@ export function FriendsPage() {
                     </div>
 
                     {/* Avatar */}
-                    <img
-                      src={item.avatarUrl}
-                      alt={item.username}
-                      className="w-12 h-12 rounded-full"
-                    />
+                    {item.avatarUrl ? (
+                      <img
+                        src={item.avatarUrl}
+                        alt={item.username}
+                        className="w-12 h-12 rounded-full object-cover"
+                      />
+                    ) : (
+                      <InitialsAvatar name={item.username} size={48} className="w-12 h-12 rounded-full" />
+                    )}
 
                     {/* Username */}
                     <div className="flex-1">
@@ -496,11 +501,15 @@ export function FriendsPage() {
                     className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-lg hover:bg-zinc-800 transition-colors"
                   >
                     <div className="flex items-center gap-3 flex-1">
-                      <img
-                        src={friend.avatarUrl}
-                        alt={friend.username}
-                        className="w-12 h-12 rounded-full"
-                      />
+                      {friend.avatarUrl ? (
+                        <img
+                          src={friend.avatarUrl}
+                          alt={friend.username}
+                          className="w-12 h-12 rounded-full object-cover"
+                        />
+                      ) : (
+                        <InitialsAvatar name={friend.username} size={48} className="w-12 h-12 rounded-full" />
+                      )}
                       <div className="flex-1">
                         <p className="text-white">{friend.username}</p>
                         <p className="text-sm text-zinc-400">
@@ -579,11 +588,15 @@ export function FriendsPage() {
                     className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg"
                   >
                     <div className="flex items-center gap-3">
-                      <img
-                        src={user.avatarUrl}
-                        alt={user.username}
-                        className="w-10 h-10 rounded-full"
-                      />
+                      {user.avatarUrl ? (
+                        <img
+                          src={user.avatarUrl}
+                          alt={user.username}
+                          className="w-10 h-10 rounded-full object-cover"
+                        />
+                      ) : (
+                        <InitialsAvatar name={user.username} size={40} className="w-10 h-10 rounded-full" />
+                      )}
                       <div>
                         <p className="text-white">{user.username}</p>
                         <p className="text-xs text-zinc-400">{user.email}</p>
@@ -635,11 +648,15 @@ export function FriendsPage() {
                     className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg"
                   >
                     <div className="flex items-center gap-3">
-                      <img
-                        src={user.avatarUrl}
-                        alt={user.username}
-                        className="w-10 h-10 rounded-full"
-                      />
+                      {user.avatarUrl ? (
+                        <img
+                          src={user.avatarUrl}
+                          alt={user.username}
+                          className="w-10 h-10 rounded-full object-cover"
+                        />
+                      ) : (
+                        <InitialsAvatar name={user.username} size={40} className="w-10 h-10 rounded-full" />
+                      )}
                       <div>
                         <p className="text-white">{user.username}</p>
                         <p className="text-xs text-zinc-400">{user.email}</p>

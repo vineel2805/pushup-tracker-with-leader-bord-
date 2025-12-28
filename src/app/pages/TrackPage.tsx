@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Square, Camera, CameraOff, RotateCw, AlertCircle } from 'lucide-react';
+import { Play, Pause, Square, Camera, CameraOff, RotateCw, AlertCircle, Save } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { addSession } from '../services/firestoreService';
 
@@ -60,6 +60,8 @@ export function TrackPage() {
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [poseDetected, setPoseDetected] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSessionSaved, setIsSessionSaved] = useState(false);
+  const [sessionEnded, setSessionEnded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -479,6 +481,8 @@ export function TrackPage() {
   const startTracking = () => {
     setIsTracking(true);
     setIsPaused(false);
+    setIsSessionSaved(false);
+    setSessionEnded(false);
     countRef.current = 0;
     setCount(0);
     setDuration(0);
@@ -510,37 +514,58 @@ export function TrackPage() {
     return false;
   };
 
-  const endTracking = async () => {
+  const endTracking = () => {
     setIsTracking(false);
     setIsPaused(false);
+    setSessionEnded(true);
     stateRef.current = 'get_ready';
     setState('get_ready');
     
-    if (currentUser && count > 0) {
-      setIsSaving(true);
-      try {
-        const today = new Date();
-        const dateString = today.toISOString().split('T')[0];
-        
-        await saveSessionWithRetry({
-          userId: currentUser.uid,
-          date: dateString,
-          pushUps: count,
-          duration: duration,
-          sets: 1,
-        });
-        
-        setFeedback(`✓ Session saved! ${count} push-ups in ${formatTime(duration)}`);
-      } catch (error) {
-        console.error('Failed to save session:', error);
-        setFeedback(`Session: ${count} push-ups in ${formatTime(duration)} (Save failed - try again)`);
-      } finally {
-        setIsSaving(false);
-      }
-    } else if (count > 0) {
-      setFeedback(`Session: ${count} push-ups in ${formatTime(duration)} (Login to save progress)`);
-    } else {
+    if (count === 0) {
       setFeedback('Session ended - no push-ups completed');
+    } else if (!currentUser) {
+      setFeedback(`Session ended: ${count} push-ups in ${formatTime(duration)}. Login to save progress.`);
+    } else {
+      setFeedback(`Session ended: ${count} push-ups in ${formatTime(duration)}. Click Save to save this session.`);
+    }
+  };
+
+  const saveSession = async () => {
+    if (!currentUser) {
+      setFeedback('Please login to save your session');
+      return;
+    }
+
+    if (count === 0) {
+      setFeedback('Cannot save session with 0 push-ups');
+      return;
+    }
+
+    if (isSessionSaved) {
+      setFeedback('Session already saved!');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const today = new Date();
+      const dateString = today.toISOString().split('T')[0];
+      
+      await saveSessionWithRetry({
+        userId: currentUser.uid,
+        date: dateString,
+        pushUps: count,
+        duration: duration,
+        sets: 1,
+      });
+      
+      setIsSessionSaved(true);
+      setFeedback(`✓ Session saved! ${count} push-ups in ${formatTime(duration)}`);
+    } catch (error) {
+      console.error('Failed to save session:', error);
+      setFeedback(`Failed to save session. Please try again.`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -629,7 +654,7 @@ export function TrackPage() {
 
           {/* Control buttons - Bottom Center */}
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 z-10">
-            {!isTracking ? (
+            {!isTracking && !sessionEnded ? (
               <button
                 onClick={startTracking}
                 disabled={!poseDetected && poseRef.current !== null}
@@ -638,7 +663,7 @@ export function TrackPage() {
                 <Play size={24} fill="white" />
                 Start Tracking
               </button>
-            ) : (
+            ) : isTracking ? (
               <>
                 <button
                   onClick={togglePause}
@@ -658,14 +683,27 @@ export function TrackPage() {
                 </button>
                 <button
                   onClick={endTracking}
-                  disabled={isSaving}
-                  className="bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 text-white px-8 py-4 rounded-full font-bold shadow-lg transition-colors flex items-center gap-2"
+                  className="bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-full font-bold shadow-lg transition-colors flex items-center gap-2"
                 >
                   <Square size={20} fill="white" />
-                  {isSaving ? 'Saving...' : 'End Session'}
+                  End Session
                 </button>
               </>
-            )}
+            ) : sessionEnded && count > 0 && !isSessionSaved ? (
+              <button
+                onClick={saveSession}
+                disabled={isSaving || !currentUser || count === 0}
+                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-600 disabled:opacity-50 text-white px-10 py-4 rounded-full font-bold shadow-lg transition-colors flex items-center gap-3"
+              >
+                <Save size={24} />
+                {isSaving ? 'Saving...' : 'Save Session'}
+              </button>
+            ) : sessionEnded && isSessionSaved ? (
+              <div className="bg-emerald-600 text-white px-10 py-4 rounded-full font-bold shadow-lg flex items-center gap-3">
+                <Save size={24} />
+                Session Saved!
+              </div>
+            ) : null}
           </div>
 
           {/* Camera flip button */}

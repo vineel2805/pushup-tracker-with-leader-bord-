@@ -20,6 +20,11 @@ This guide will help you set up Firebase for authentication and data storage in 
    - Click on "Email/Password"
    - Toggle "Enable" to ON
    - Click "Save"
+5. Enable **Google** authentication:
+   - Click on "Google"
+   - Toggle "Enable" to ON
+   - Enter your project support email
+   - Click "Save"
 
 ## Step 3: Create Firestore Database
 
@@ -31,87 +36,25 @@ This guide will help you set up Firebase for authentication and data storage in 
 
 ### Firestore Security Rules
 
-For production, update your Firestore rules. Go to **Firestore Database** > **Rules** and use:
+**CRITICAL:** Copy the rules from `FIREBASE_RULES.txt` and paste them into Firebase Console.
 
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Helper function to check if user is authenticated
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-    
-    // Helper function to check if user owns the document
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-    
-    // Users collection
-    match /users/{userId} {
-      // Allow users to read their own profile
-      allow get: if isAuthenticated() && isOwner(userId);
-      
-      // Allow users to read public profiles (for search/suggestions)
-      allow get: if isAuthenticated() && resource.data.publicProfile == true;
-      
-      // Allow users to list/query public profiles (required for search queries)
-      allow list: if isAuthenticated();
-      
-      // Allow users to write only their own profile
-      allow create, update: if isAuthenticated() && isOwner(userId);
-    }
-    
-    // Sessions collection
-    match /sessions/{sessionId} {
-      // Allow read/write only for own sessions
-      allow read, write: if isAuthenticated() && 
-        resource.data.userId == request.auth.uid;
-      
-      // Allow creating sessions with correct userId
-      allow create: if isAuthenticated() && 
-        request.resource.data.userId == request.auth.uid;
-    }
-    
-    // Friend requests collection
-    match /friendRequests/{requestId} {
-      // Allow reading own friend requests (sent or received)
-      allow get: if isAuthenticated() && (
-        resource.data.toUserId == request.auth.uid || 
-        resource.data.fromUserId == request.auth.uid
-      );
-      
-      // Allow listing friend requests - queries filter by toUserId/fromUserId
-      // The query itself ensures only relevant requests are returned
-      allow list: if isAuthenticated();
-      
-      // Allow creating friend requests
-      allow create: if isAuthenticated() && 
-        request.resource.data.fromUserId == request.auth.uid;
-      
-      // Allow updating friend requests (only recipient can update)
-      allow update: if isAuthenticated() && 
-        resource.data.toUserId == request.auth.uid;
-    }
-  }
-}
-```
+1. Go to **Firestore Database** → **Rules**
+2. **DELETE** all existing rules
+3. **PASTE** the rules from `FIREBASE_RULES.txt`
+4. Click **Publish**
 
 **Important Notes:**
 
-1. **Query Permissions**: The rules now use `list` permission which is required for Firestore queries. The `get` permission only works for individual document reads.
+1. **Username Queries**: The `allow list: if true` on users collection allows checking username availability during signup (even when unauthenticated). This is necessary for the signup flow.
 
-2. **User Search**: The `allow list: if isAuthenticated()` on users collection allows authenticated users to query the users collection. The application code filters results to only show public profiles.
+2. **Friend Sessions**: Users can read sessions of their friends (for leaderboards). The rules check if the session owner is in the current user's friends list.
 
-3. **Friend Requests Query**: The `allow list` on friendRequests allows queries, but you must have the composite index created (which you already have).
+3. **Public Profiles**: Authenticated users can read public profiles for search and suggestions.
 
-4. **Index Required**: Make sure you have created the composite index for friendRequests:
-   - Collection: `friendRequests`
-   - Fields: `toUserId` (Ascending), `status` (Ascending), `createdAt` (Descending)
-
-5. **User Search Index**: You may also need to create an index for user search:
-   - Collection: `users`
-   - Fields: `username` (Ascending), `publicProfile` (Ascending)
+4. **Indexes Required**: Make sure you have created these composite indexes:
+   - **Sessions**: `userId` (Ascending), `createdAt` (Descending)
+   - **Friend Requests**: `toUserId` (Ascending), `status` (Ascending), `createdAt` (Descending)
+   - **Users**: `username` (Ascending), `publicProfile` (Ascending) - for search queries
 
 ## Step 4: Get Firebase Configuration
 

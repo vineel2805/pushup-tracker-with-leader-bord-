@@ -23,7 +23,7 @@ export interface User {
   id: string;
   username: string;
   email: string;
-  avatarUrl: string;
+  avatarUrl?: string | null;
   bio?: string;
   publicProfile: boolean;
   showOnLeaderboard: boolean;
@@ -46,14 +46,15 @@ export interface Session {
 export interface Friend {
   id: string;
   username: string;
-  avatarUrl: string;
+  avatarUrl?: string | null;
+  email: string;
 }
 
 export interface FriendRequest {
   id: string;
   fromUserId: string;
   fromUsername: string;
-  fromAvatarUrl: string;
+  fromAvatarUrl?: string | null;
   toUserId: string;
   status: 'pending' | 'accepted' | 'rejected';
   createdAt: Timestamp;

@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { TrackPage } from './pages/TrackPage';
 import { HistoryPage } from './pages/HistoryPage';
@@ -11,6 +12,9 @@ import { SettingsPage } from './pages/SettingsPage';
 import { PublicProfilePage } from './pages/PublicProfilePage';
 import { Navigation } from './components/Navigation';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { SidebarProvider, useSidebar } from './context/SidebarContext';
+import { useIsMobile } from './components/ui/use-mobile';
+import { ToastContainer } from './utils/toast';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { currentUser, loading } = useAuth();
@@ -26,24 +30,47 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   return currentUser ? <>{children}</> : <Navigate to="/login" />;
 }
 
-function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
+function AuthenticatedLayoutContent({ children }: { children: React.ReactNode }) {
+  const { isOpen, isCollapsed } = useSidebar();
+  const isMobile = useIsMobile();
+
   return (
     <div className="flex min-h-screen bg-black">
       <Navigation />
-      <main className="flex-1 ml-64">{children}</main>
+      <main 
+        className={`flex-1 transition-all duration-300 ease-in-out ${
+          isMobile 
+            ? 'ml-0' 
+            : isCollapsed 
+              ? 'ml-16' 
+              : 'ml-64'
+        }`}
+      >
+        {children}
+      </main>
     </div>
+  );
+}
+
+function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <SidebarProvider>
+      <AuthenticatedLayoutContent>{children}</AuthenticatedLayoutContent>
+    </SidebarProvider>
   );
 }
 
 function App() {
   return (
     <AuthProvider>
+      <ToastContainer />
       <Router>
         <Routes>
         {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/profile/:username" element={<PublicProfilePage />} />
 
         {/* Protected Routes */}
