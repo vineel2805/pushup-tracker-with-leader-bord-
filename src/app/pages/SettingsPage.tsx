@@ -12,6 +12,7 @@ import { ChangeAvatarModal } from '../components/ChangeAvatarModal';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/tooltip';
 import { toast } from '../utils/toast';
 import { getInitials, generateInitialsAvatar } from '../utils/avatarUtils';
+import { getAvatarFromStorage, saveAvatarToStorage, clearAvatarFromStorage } from '../utils/avatarStorage';
 import {
   Dialog,
   DialogContent,
@@ -71,6 +72,21 @@ export function SettingsPage() {
       setPublicProfile(userProfile.publicProfile ?? true);
       setShowOnLeaderboard(userProfile.showOnLeaderboard ?? true);
       setShowGraphs(userProfile.showGraphs ?? true);
+      
+      // Sync avatar between profile and localStorage
+      if (userProfile.avatarUrl) {
+        // Sync profile avatar to localStorage
+        saveAvatarToStorage(userProfile.avatarUrl);
+      } else {
+        // Load avatar from localStorage if available and profile doesn't have one
+        const storedAvatar = getAvatarFromStorage();
+        if (storedAvatar && currentUser) {
+          // Sync localStorage avatar to profile if it exists
+          updateUserProfile(currentUser.uid, { avatarUrl: storedAvatar })
+            .then(() => refreshUserProfile())
+            .catch((err) => console.warn('Failed to sync stored avatar:', err));
+        }
+      }
       
       originalValuesRef.current = {
         username: userProfile.username || '',
@@ -162,40 +178,57 @@ export function SettingsPage() {
       let newAvatarUrl: string | null;
 
       if (file) {
-        // Upload new avatar
+        // Upload new avatar (for file uploads - though we're not using this anymore)
         newAvatarUrl = await uploadAvatar(currentUser.uid, file);
         
-        // Delete old avatar if it exists and is not a data URI
-        if (userProfile?.avatarUrl && !userProfile.avatarUrl.startsWith('data:image')) {
+        // Delete old avatar if it exists and is not a data URI or local path
+        if (userProfile?.avatarUrl && 
+            !userProfile.avatarUrl.startsWith('data:image') && 
+            !userProfile.avatarUrl.startsWith('/profile-pics/') &&
+            !userProfile.avatarUrl.includes('/src/profile-pics/')) {
           await deleteAvatar(userProfile.avatarUrl).catch(() => {
             // Ignore deletion errors
           });
         }
+        
+        // Save to localStorage
+        saveAvatarToStorage(newAvatarUrl);
       } else if (defaultUrl) {
-        // Use selected default avatar from gallery
+        // Use selected default avatar from gallery (local image)
         newAvatarUrl = defaultUrl;
         
-        // Delete old avatar if it exists and is not a data URI
-        if (userProfile?.avatarUrl && !userProfile.avatarUrl.startsWith('data:image')) {
+        // Delete old avatar if it exists and is a Firebase URL (not local)
+        if (userProfile?.avatarUrl && 
+            !userProfile.avatarUrl.startsWith('data:image') && 
+            !userProfile.avatarUrl.startsWith('/profile-pics/') &&
+            !userProfile.avatarUrl.includes('/src/profile-pics/')) {
           await deleteAvatar(userProfile.avatarUrl).catch(() => {
             // Ignore deletion errors
           });
         }
+        
+        // Save to localStorage
+        saveAvatarToStorage(newAvatarUrl);
       } else {
         // Remove avatar - set to null to show initials
         newAvatarUrl = null;
         
-        // Delete old avatar if it exists (not a data URI)
-        if (userProfile?.avatarUrl && !userProfile.avatarUrl.startsWith('data:image')) {
+        // Delete old avatar if it exists (only Firebase URLs)
+        if (userProfile?.avatarUrl && 
+            !userProfile.avatarUrl.startsWith('data:image') && 
+            !userProfile.avatarUrl.startsWith('/profile-pics/') &&
+            !userProfile.avatarUrl.includes('/src/profile-pics/')) {
           await deleteAvatar(userProfile.avatarUrl).catch(() => {
             // Ignore deletion errors
           });
         }
+        
+        // Clear from localStorage
+        clearAvatarFromStorage();
       }
 
       await updateUserProfile(currentUser.uid, { avatarUrl: newAvatarUrl });
       await refreshUserProfile();
-      setAvatarModalOpen(false);
       toast.success('Profile photo updated successfully');
     } catch (err: any) {
       toast.error(err.message || 'Failed to update profile photo');
