@@ -3,7 +3,7 @@ import { Home, Activity, History, TrendingUp, Users, Settings, LogOut, Menu, X }
 import { logOut } from '../services/authService';
 import { useSidebar } from '../context/SidebarContext';
 import { useIsMobile } from './ui/use-mobile';
-import { Sheet, SheetContent } from './ui/sheet';
+import { Sheet, SheetContent, SheetTitle } from './ui/sheet';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 export function Navigation() {
@@ -134,6 +134,7 @@ export function Navigation() {
           }
         }}>
           <SheetContent side="left" className="w-64 bg-zinc-900 border-zinc-800 p-6">
+            <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
             <NavContent />
           </SheetContent>
         </Sheet>

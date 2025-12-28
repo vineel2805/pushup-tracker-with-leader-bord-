@@ -66,12 +66,14 @@ export function DashboardPage() {
       avatarUrl: userProfile?.avatarUrl || '',
       total: getWeeklyTotal(sessions) 
     },
-    ...friends.map(friend => ({
-      ...friend,
-      total: friendSessions[friend.id] 
-        ? getWeeklyTotal(friendSessions[friend.id])
-        : 0,
-    })),
+    ...friends
+      .filter(friend => friend.showOnLeaderboard !== false)
+      .map(friend => ({
+        ...friend,
+        total: friendSessions[friend.id] 
+          ? getWeeklyTotal(friendSessions[friend.id])
+          : 0,
+      })),
   ]
     .sort((a, b) => b.total - a.total)
     .slice(0, 3);

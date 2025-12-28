@@ -188,6 +188,11 @@ export function FriendsPage() {
 
   // Calculate leaderboard data
   const getLeaderboardData = () => {
+    // Filter out friends who have showOnLeaderboard: false
+    const visibleFriends = friends.filter(
+      friend => friend.showOnLeaderboard !== false
+    );
+
     const allUsers = [
       {
         id: currentUser?.uid || '',
@@ -195,7 +200,7 @@ export function FriendsPage() {
         avatarUrl: userProfile?.avatarUrl || '',
         sessions: sessions,
       },
-      ...friends.map(friend => ({
+      ...visibleFriends.map(friend => ({
         ...friend,
         sessions: friendSessions[friend.id] || [],
       })),

@@ -48,6 +48,7 @@ export interface Friend {
   username: string;
   avatarUrl?: string | null;
   email: string;
+  showOnLeaderboard?: boolean;
 }
 
 export interface FriendRequest {
@@ -296,6 +297,8 @@ export const getFriends = async (userId: string): Promise<Friend[]> => {
           id: friendDoc.id,
           username: friendDoc.username,
           avatarUrl: friendDoc.avatarUrl,
+          email: friendDoc.email,
+          showOnLeaderboard: friendDoc.showOnLeaderboard ?? true,
         });
       }
     }
@@ -331,6 +334,8 @@ export const subscribeToFriends = (
                 id: friendDoc.id,
                 username: friendDoc.username,
                 avatarUrl: friendDoc.avatarUrl,
+                email: friendDoc.email,
+                showOnLeaderboard: friendDoc.showOnLeaderboard ?? true,
               });
             }
           } catch (error) {
@@ -359,6 +364,7 @@ export const addFriend = async (userId: string, friendId: string): Promise<void>
       if (!currentFriends.includes(friendId)) {
         await updateDoc(userRef, {
           friends: [...currentFriends, friendId],
+          updatedAt: Timestamp.now(),
         });
       }
     }
@@ -376,6 +382,7 @@ export const removeFriend = async (userId: string, friendId: string): Promise<vo
       const currentFriends = userSnap.data().friends || [];
       await updateDoc(userRef, {
         friends: currentFriends.filter((id: string) => id !== friendId),
+        updatedAt: Timestamp.now(),
       });
     }
   } catch (error: any) {
