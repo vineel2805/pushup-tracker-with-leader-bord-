@@ -9,7 +9,6 @@ import {
   getFriendSessions,
   acceptFriendRequest,
   rejectFriendRequest,
-  removeFriend,
   sendFriendRequest,
   searchUsersByUsername,
   getFriendSuggestions,
@@ -18,6 +17,8 @@ import {
   FriendRequest,
   User,
 } from '../services/firestoreService';
+import { doc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { db } from '../config/firebase';
 import {
   getWeeklyTotal,
   getMonthlyTotal,
@@ -170,8 +171,9 @@ export function FriendsPage() {
   };
 
   const handleRejectRequest = async (requestId: string) => {
+    if (!currentUser) return;
     try {
-      await rejectFriendRequest(requestId);
+      await rejectFriendRequest(requestId, currentUser.uid);
     } catch (error) {
       console.error('Error rejecting friend request:', error);
     }
@@ -180,7 +182,17 @@ export function FriendsPage() {
   const handleRemoveFriend = async (friendId: string) => {
     if (!currentUser) return;
     try {
-      await removeFriend(currentUser.uid, friendId);
+      // TODO: Implement transactional friend removal for data integrity
+      // Currently using direct update - should be wrapped in transaction
+      const userRef = doc(db, 'users', currentUser.uid);
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists()) {
+        const currentFriends = userSnap.data().friends || [];
+        await updateDoc(userRef, {
+          friends: currentFriends.filter((id: string) => id !== friendId),
+          updatedAt: Timestamp.now(),
+        });
+      }
     } catch (error) {
       console.error('Error removing friend:', error);
     }

@@ -9,7 +9,9 @@ type PushUpState = 'get_ready' | 'plank' | 'down' | 'up';
 const CONSTANTS = {
   MIN_STATE_CHANGE_MS: 300,
   VISIBILITY_THRESHOLD: 0.3,
-  POSE_FPS: 30,
+  POSE_FPS_DESKTOP: 30,
+  POSE_FPS_MOBILE: 15,
+  UI_SYNC_FPS: 10,
   PLANK_BACK_ANGLE: 140,
   PLANK_ELBOW_ANGLE: 150,
   DOWN_ELBOW_ANGLE: 90,
@@ -17,6 +19,17 @@ const CONSTANTS = {
   MAX_ELBOW_FLARE: 70,
   GRACE_PERIOD_MS: 2000,
   SAVE_RETRY_ATTEMPTS: 3,
+};
+
+// Detect mobile device for adaptive FPS
+const isMobileDevice = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+    (window.innerWidth <= 768);
+};
+
+const getPoseFPS = (): number => {
+  return isMobileDevice() ? CONSTANTS.POSE_FPS_MOBILE : CONSTANTS.POSE_FPS_DESKTOP;
 };
 
 const LM = {
@@ -68,6 +81,7 @@ export function TrackPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animationRef = useRef<number | undefined>(undefined);
+  const manualFrameRef = useRef<number | undefined>(undefined);
   
   const stateRef = useRef<PushUpState>('get_ready');
   const countRef = useRef(0);
@@ -79,6 +93,17 @@ export function TrackPage() {
   const poseRef = useRef<any>(null);
   const lastPoseResultsRef = useRef<any>(null);
   const cameraInstanceRef = useRef<any>(null);
+  const isMountedRef = useRef(true);
+  
+  // UI buffer refs - updated in real-time loops, synced to React state at fixed interval
+  const uiBufferRef = useRef({
+    count: 0,
+    state: 'get_ready' as PushUpState,
+    feedback: 'Enable camera to start',
+    poseDetected: false,
+    needsSync: false,
+  });
+  const uiSyncIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     trackingRef.current = isTracking;
@@ -97,7 +122,38 @@ export function TrackPage() {
     return () => clearInterval(interval);
   }, [isTracking, isPaused]);
 
+  // UI sync effect - syncs ref-based UI buffer to React state at fixed 10 FPS
+  // This prevents excessive re-renders from real-time pose processing
+  useEffect(() => {
+    const syncInterval = 1000 / CONSTANTS.UI_SYNC_FPS;
+    
+    uiSyncIntervalRef.current = setInterval(() => {
+      if (!isMountedRef.current) return;
+      
+      const buffer = uiBufferRef.current;
+      if (!buffer.needsSync) return;
+      
+      // Batch all UI updates together
+      setCount(buffer.count);
+      setState(buffer.state);
+      setFeedback(buffer.feedback);
+      setPoseDetected(buffer.poseDetected);
+      buffer.needsSync = false;
+    }, syncInterval);
+    
+    return () => {
+      if (uiSyncIntervalRef.current) {
+        clearInterval(uiSyncIntervalRef.current);
+        uiSyncIntervalRef.current = null;
+      }
+    };
+  }, []);
+
   // Initialize MediaPipe Pose
+  // Note: onPoseResults is excluded from deps because:
+  // - It's a stable callback that uses refs (isMountedRef, trackingRef, pausedRef)
+  // - Re-registering would cause MediaPipe to call the callback multiple times
+  // - The callback checks isMountedRef to prevent state updates after unmount
   useEffect(() => {
     const loadPose = async () => {
       try {
@@ -119,38 +175,77 @@ export function TrackPage() {
           minTrackingConfidence: 0.5,
         });
 
+        // Register callback once - do not re-register on re-renders
         pose.onResults(onPoseResults);
         poseRef.current = { pose, Camera };
         console.log('MediaPipe Pose loaded successfully');
       } catch (error) {
         console.error('Failed to initialize MediaPipe Pose:', error);
-        setError('Pose detection unavailable - using video only mode');
+        if (isMountedRef.current) {
+          setError('Pose detection unavailable - using video only mode');
+        }
         poseRef.current = null;
       }
     };
 
     loadPose();
-  }, []);
+
+    // No cleanup here - Pose cleanup happens in component unmount cleanup only
+    // This prevents duplicate close() calls
+    return () => {
+      // Pose instance cleanup is handled in component unmount cleanup
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Camera management
+  // Note: startCamera and stopCamera are excluded from deps because:
+  // - They are stable functions that use refs and don't depend on props/state
+  // - Including them would cause unnecessary re-initialization of camera
+  // - The functions check isMountedRef internally to prevent operations after unmount
   useEffect(() => {
     if (cameraEnabled) {
       startCamera();
     } else {
       stopCamera();
     }
-    return () => stopCamera();
-  }, [cameraEnabled, facingMode]);
+    // Cleanup: Always stop camera on unmount or when dependencies change
+    return () => {
+      stopCamera();
+    };
+  }, [cameraEnabled, facingMode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Component unmount cleanup - centralized cleanup for all resources
+  // This is the ONLY place where pose.close() is called to prevent duplicate cleanup
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      // Stop camera (cleans up streams, animation frames, camera instance)
+      stopCamera();
+      // Close MediaPipe Pose instance - EXACTLY ONCE on unmount
+      if (poseRef.current?.pose) {
+        try {
+          poseRef.current.pose.close();
+        } catch (error) {
+          console.error('Error closing MediaPipe Pose on unmount:', error);
+        }
+        poseRef.current = null;
+      }
+    };
+  }, []);
 
   // Unified render loop
   const startRenderLoop = () => {
-    if (animationRef.current) {
+    // Cancel any existing render loop
+    if (animationRef.current !== undefined) {
       cancelAnimationFrame(animationRef.current);
       animationRef.current = undefined;
     }
     
     const render = () => {
-      if (!canvasRef.current || !videoRef.current || !streamRef.current) {
+      // Stop if component unmounted or resources unavailable
+      if (!isMountedRef.current || !canvasRef.current || !videoRef.current || !streamRef.current) {
+        animationRef.current = undefined;
         return;
       }
       
@@ -183,7 +278,12 @@ export function TrackPage() {
         drawPose(ctx, lastPoseResultsRef.current.poseLandmarks);
       }
       
-      animationRef.current = requestAnimationFrame(render);
+      // Schedule next frame only if still mounted and resources available
+      if (isMountedRef.current && streamRef.current) {
+        animationRef.current = requestAnimationFrame(render);
+      } else {
+        animationRef.current = undefined;
+      }
     };
     
     render();
@@ -237,11 +337,23 @@ export function TrackPage() {
         } else if (poseRef.current?.pose) {
           console.log('Using manual frame sending for pose detection');
           let lastFrameTime = 0;
-          const frameInterval = 1000 / CONSTANTS.POSE_FPS;
+          const frameInterval = 1000 / getPoseFPS();
+          
+          // Cancel any existing manual frame loop
+          if (manualFrameRef.current !== undefined) {
+            cancelAnimationFrame(manualFrameRef.current);
+            manualFrameRef.current = undefined;
+          }
           
           const sendFrame = async () => {
+            // Stop if component unmounted or resources unavailable
+            if (!isMountedRef.current || !streamRef.current || !videoRef.current || !poseRef.current?.pose) {
+              manualFrameRef.current = undefined;
+              return;
+            }
+            
             const now = Date.now();
-            if (videoRef.current && poseRef.current?.pose && videoRef.current.readyState >= 2) {
+            if (videoRef.current.readyState >= 2) {
               if (now - lastFrameTime >= frameInterval) {
                 lastFrameTime = now;
                 try {
@@ -251,11 +363,15 @@ export function TrackPage() {
                 }
               }
             }
-            if (streamRef.current) {
-              requestAnimationFrame(sendFrame);
+            
+            // Schedule next frame only if still mounted and resources available
+            if (isMountedRef.current && streamRef.current) {
+              manualFrameRef.current = requestAnimationFrame(sendFrame);
+            } else {
+              manualFrameRef.current = undefined;
             }
           };
-          sendFrame();
+          manualFrameRef.current = requestAnimationFrame(sendFrame);
         } else {
           console.log('MediaPipe not available, using video only mode');
         }
@@ -268,11 +384,19 @@ export function TrackPage() {
   };
 
   const stopCamera = () => {
-    if (animationRef.current) {
+    // Cancel render loop animation frame
+    if (animationRef.current !== undefined) {
       cancelAnimationFrame(animationRef.current);
       animationRef.current = undefined;
     }
     
+    // Cancel manual frame sending animation frame
+    if (manualFrameRef.current !== undefined) {
+      cancelAnimationFrame(manualFrameRef.current);
+      manualFrameRef.current = undefined;
+    }
+    
+    // Stop MediaPipe Camera instance
     if (cameraInstanceRef.current) {
       try {
         cameraInstanceRef.current.stop();
@@ -282,30 +406,52 @@ export function TrackPage() {
       cameraInstanceRef.current = null;
     }
     
+    // Stop all camera stream tracks
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current.getTracks().forEach(track => {
+        track.stop();
+      });
       streamRef.current = null;
     }
     
+    // Clear video source
     if (videoRef.current) {
       videoRef.current.srcObject = null;
+      videoRef.current.pause();
     }
+    
+    // Clear pose results to prevent stale data
+    lastPoseResultsRef.current = null;
   };
 
   const onPoseResults = (results: any) => {
+    // Ignore results if component is unmounted
+    if (!isMountedRef.current) {
+      return;
+    }
+    
     lastPoseResultsRef.current = results;
     
     if (results.poseLandmarks) {
-      setPoseDetected(true);
+      // Update ref buffer instead of React state directly
+      if (uiBufferRef.current.poseDetected !== true) {
+        uiBufferRef.current.poseDetected = true;
+        uiBufferRef.current.needsSync = true;
+      }
       visibilityGracePeriodRef.current = 0;
       
       if (trackingRef.current && !pausedRef.current) {
         detectPushUp(results.poseLandmarks);
       }
     } else {
-      setPoseDetected(false);
-      if (trackingRef.current) {
-        setFeedback('Position yourself in frame');
+      // Update ref buffer instead of React state directly
+      if (uiBufferRef.current.poseDetected !== false) {
+        uiBufferRef.current.poseDetected = false;
+        uiBufferRef.current.needsSync = true;
+      }
+      if (trackingRef.current && uiBufferRef.current.feedback !== 'Position yourself in frame') {
+        uiBufferRef.current.feedback = 'Position yourself in frame';
+        uiBufferRef.current.needsSync = true;
       }
     }
   };
@@ -383,10 +529,18 @@ export function TrackPage() {
         visibilityGracePeriodRef.current = now;
       } else if (now - visibilityGracePeriodRef.current > CONSTANTS.GRACE_PERIOD_MS) {
         stateRef.current = 'get_ready';
-        setState('get_ready');
-        setFeedback('Full body must be visible - move back');
+        // Update buffer only on state transition
+        if (uiBufferRef.current.state !== 'get_ready' || uiBufferRef.current.feedback !== 'Full body must be visible - move back') {
+          uiBufferRef.current.state = 'get_ready';
+          uiBufferRef.current.feedback = 'Full body must be visible - move back';
+          uiBufferRef.current.needsSync = true;
+        }
       } else {
-        setFeedback('Stay in frame...');
+        // Only update if feedback actually changed
+        if (uiBufferRef.current.feedback !== 'Stay in frame...') {
+          uiBufferRef.current.feedback = 'Stay in frame...';
+          uiBufferRef.current.needsSync = true;
+        }
       }
       return;
     }
@@ -444,36 +598,56 @@ export function TrackPage() {
       if (avgBackAngle > CONSTANTS.PLANK_BACK_ANGLE && avgElbowAngle > CONSTANTS.PLANK_ELBOW_ANGLE) {
         if (now - lastStateChangeRef.current > CONSTANTS.MIN_STATE_CHANGE_MS) {
           stateRef.current = 'plank';
-          setState('plank');
-          setFeedback('Perfect! Ready to start');
+          // State transition - update buffer
+          uiBufferRef.current.state = 'plank';
+          uiBufferRef.current.feedback = 'Perfect! Ready to start';
+          uiBufferRef.current.needsSync = true;
           lastStateChangeRef.current = now;
         }
       } else {
-        setFeedback('Get into plank position (straight body, arms extended)');
+        // Only update if feedback changed
+        const newFeedback = 'Get into plank position (straight body, arms extended)';
+        if (uiBufferRef.current.feedback !== newFeedback) {
+          uiBufferRef.current.feedback = newFeedback;
+          uiBufferRef.current.needsSync = true;
+        }
       }
     } else if (stateRef.current === 'plank' || stateRef.current === 'up') {
       if (avgElbowAngle < CONSTANTS.DOWN_ELBOW_ANGLE) {
         if (now - lastStateChangeRef.current > CONSTANTS.MIN_STATE_CHANGE_MS) {
           stateRef.current = 'down';
-          setState('down');
-          setFeedback('Push up now!');
+          // State transition - update buffer
+          uiBufferRef.current.state = 'down';
+          uiBufferRef.current.feedback = 'Push up now!';
+          uiBufferRef.current.needsSync = true;
           lastStateChangeRef.current = now;
         }
       } else {
-        setFeedback(formFeedback);
+        // Only update if formFeedback changed
+        if (uiBufferRef.current.feedback !== formFeedback) {
+          uiBufferRef.current.feedback = formFeedback;
+          uiBufferRef.current.needsSync = true;
+        }
       }
     } else if (stateRef.current === 'down') {
       if (avgElbowAngle > CONSTANTS.UP_ELBOW_ANGLE) {
         if (now - lastStateChangeRef.current > CONSTANTS.MIN_STATE_CHANGE_MS) {
           countRef.current++;
-          setCount(countRef.current);
           stateRef.current = 'up';
-          setState('up');
-          setFeedback(`Rep ${countRef.current}! ${formFeedback}`);
+          // State transition - update buffer with new count
+          const newFeedback = `Rep ${countRef.current}! ${formFeedback}`;
+          uiBufferRef.current.count = countRef.current;
+          uiBufferRef.current.state = 'up';
+          uiBufferRef.current.feedback = newFeedback;
+          uiBufferRef.current.needsSync = true;
           lastStateChangeRef.current = now;
         }
       } else {
-        setFeedback('Keep pushing up');
+        // Only update if feedback changed
+        if (uiBufferRef.current.feedback !== 'Keep pushing up') {
+          uiBufferRef.current.feedback = 'Keep pushing up';
+          uiBufferRef.current.needsSync = true;
+        }
       }
     }
   };
@@ -489,6 +663,14 @@ export function TrackPage() {
     stateRef.current = 'get_ready';
     setState('get_ready');
     setFeedback('Get into plank position');
+    // Reset UI buffer
+    uiBufferRef.current = {
+      count: 0,
+      state: 'get_ready',
+      feedback: 'Get into plank position',
+      poseDetected: uiBufferRef.current.poseDetected,
+      needsSync: false,
+    };
   };
 
   const togglePause = () => {

@@ -15,6 +15,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { SidebarProvider, useSidebar } from './context/SidebarContext';
 import { useIsMobile } from './components/ui/use-mobile';
 import { ToastContainer } from './utils/toast';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { currentUser, loading } = useAuth();
@@ -62,84 +63,100 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
 
 function App() {
   return (
-    <AuthProvider>
-      <ToastContainer />
-      <Router>
-        <Routes>
-        {/* Public Routes */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="/profile/:username" element={<PublicProfilePage />} />
+    <ErrorBoundary>
+      <AuthProvider>
+        <ToastContainer />
+        <Router>
+          <ErrorBoundary>
+            <Routes>
+            {/* Public Routes */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/signup" element={<SignupPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/profile/:username" element={<PublicProfilePage />} />
 
-        {/* Protected Routes */}
-        <Route
-          path="/dashboard"
-          element={
-            <PrivateRoute>
-              <AuthenticatedLayout>
-                <DashboardPage />
-              </AuthenticatedLayout>
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/track"
-          element={
-            <PrivateRoute>
-              <AuthenticatedLayout>
-                <TrackPage />
-              </AuthenticatedLayout>
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/history"
-          element={
-            <PrivateRoute>
-              <AuthenticatedLayout>
-                <HistoryPage />
-              </AuthenticatedLayout>
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/analytics"
-          element={
-            <PrivateRoute>
-              <AuthenticatedLayout>
-                <AnalyticsPage />
-              </AuthenticatedLayout>
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/friends"
-          element={
-            <PrivateRoute>
-              <AuthenticatedLayout>
-                <FriendsPage />
-              </AuthenticatedLayout>
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/settings"
-          element={
-            <PrivateRoute>
-              <AuthenticatedLayout>
-                <SettingsPage />
-              </AuthenticatedLayout>
-            </PrivateRoute>
-          }
-        />
+            {/* Protected Routes */}
+            <Route
+              path="/dashboard"
+              element={
+                <PrivateRoute>
+                  <AuthenticatedLayout>
+                    <ErrorBoundary>
+                      <DashboardPage />
+                    </ErrorBoundary>
+                  </AuthenticatedLayout>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/track"
+              element={
+                <PrivateRoute>
+                  <AuthenticatedLayout>
+                    <ErrorBoundary>
+                      <TrackPage />
+                    </ErrorBoundary>
+                  </AuthenticatedLayout>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/history"
+              element={
+                <PrivateRoute>
+                  <AuthenticatedLayout>
+                    <ErrorBoundary>
+                      <HistoryPage />
+                    </ErrorBoundary>
+                  </AuthenticatedLayout>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/analytics"
+              element={
+                <PrivateRoute>
+                  <AuthenticatedLayout>
+                    <ErrorBoundary>
+                      <AnalyticsPage />
+                    </ErrorBoundary>
+                  </AuthenticatedLayout>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/friends"
+              element={
+                <PrivateRoute>
+                  <AuthenticatedLayout>
+                    <ErrorBoundary>
+                      <FriendsPage />
+                    </ErrorBoundary>
+                  </AuthenticatedLayout>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <PrivateRoute>
+                  <AuthenticatedLayout>
+                    <ErrorBoundary>
+                      <SettingsPage />
+                    </ErrorBoundary>
+                  </AuthenticatedLayout>
+                </PrivateRoute>
+              }
+            />
 
-        {/* Catch all - redirect to home */}
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
-    </Router>
-    </AuthProvider>
+            {/* Catch all - redirect to home */}
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+          </ErrorBoundary>
+        </Router>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

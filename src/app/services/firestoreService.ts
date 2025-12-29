@@ -15,6 +15,7 @@ import {
   onSnapshot,
   QuerySnapshot,
   DocumentData,
+  runTransaction,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
@@ -354,7 +355,12 @@ export const subscribeToFriends = (
   );
 };
 
-export const addFriend = async (userId: string, friendId: string): Promise<void> => {
+/**
+ * Internal helper to add a friend to a user's friend list
+ * WARNING: This is NOT transactional - use only within transactions
+ * For public API, use acceptFriendRequest which handles transactions
+ */
+const addFriend = async (userId: string, friendId: string): Promise<void> => {
   try {
     const userRef = doc(db, 'users', userId);
     const userSnap = await getDoc(userRef);
@@ -373,7 +379,11 @@ export const addFriend = async (userId: string, friendId: string): Promise<void>
   }
 };
 
-export const removeFriend = async (userId: string, friendId: string): Promise<void> => {
+/**
+ * Internal helper to remove a friend from a user's friend list
+ * WARNING: This is NOT transactional - use only within transactions if needed
+ */
+const removeFriend = async (userId: string, friendId: string): Promise<void> => {
   try {
     const userRef = doc(db, 'users', userId);
     const userSnap = await getDoc(userRef);
@@ -465,28 +475,113 @@ export const subscribeToFriendRequests = (
 export const acceptFriendRequest = async (requestId: string, userId: string): Promise<void> => {
   try {
     const requestRef = doc(db, 'friendRequests', requestId);
-    const requestSnap = await getDoc(requestRef);
+    const toUserRef = doc(db, 'users', userId);
 
-    if (requestSnap.exists()) {
+    await runTransaction(db, async (transaction) => {
+      // GUARD: Read friend request FIRST - this must be read before user documents
+      // to validate request exists and get fromUserId for subsequent reads
+      const requestSnap = await transaction.get(requestRef);
+      if (!requestSnap.exists()) {
+        throw new Error('Friend request not found');
+      }
+
       const requestData = requestSnap.data() as FriendRequest;
       
-      // Update request status
-      await updateDoc(requestRef, { status: 'accepted' });
+      // Verify the request is for the current user
+      if (requestData.toUserId !== userId) {
+        throw new Error('Unauthorized: This friend request is not for you');
+      }
 
-      // Add to both users' friend lists
-      await addFriend(requestData.toUserId, requestData.fromUserId);
-      await addFriend(requestData.fromUserId, requestData.toUserId);
-    }
+      // Verify request is still pending
+      if (requestData.status !== 'pending') {
+        throw new Error(`Friend request already ${requestData.status}`);
+      }
+
+      // GUARD: Read user documents AFTER reading request - this ordering ensures
+      // we have validated the request before reading user data
+      const fromUserRefFinal = doc(db, 'users', requestData.fromUserId);
+      const [toUserSnap, fromUserSnap] = await Promise.all([
+        transaction.get(toUserRef),
+        transaction.get(fromUserRefFinal),
+      ]);
+
+      if (!toUserSnap.exists()) {
+        throw new Error('Your user profile not found');
+      }
+      if (!fromUserSnap.exists()) {
+        throw new Error('Sender user profile not found');
+      }
+
+      const toUserData = toUserSnap.data();
+      const fromUserData = fromUserSnap.data();
+
+      // Get current friend lists
+      const toUserFriends = toUserData?.friends || [];
+      const fromUserFriends = fromUserData?.friends || [];
+
+      // Check if already friends (idempotency)
+      if (toUserFriends.includes(requestData.fromUserId) || 
+          fromUserFriends.includes(userId)) {
+        // Already friends, just update request status
+        transaction.update(requestRef, { status: 'accepted' });
+        return;
+      }
+
+      // Atomically update all three documents
+      transaction.update(requestRef, { status: 'accepted' });
+      transaction.update(toUserRef, {
+        friends: [...toUserFriends, requestData.fromUserId],
+        updatedAt: Timestamp.now(),
+      });
+      transaction.update(fromUserRefFinal, {
+        friends: [...fromUserFriends, userId],
+        updatedAt: Timestamp.now(),
+      });
+    });
   } catch (error: any) {
+    // Re-throw custom errors as-is
+    if (error.message.includes('not found') || 
+        error.message.includes('Unauthorized') ||
+        error.message.includes('already')) {
+      throw error;
+    }
     throw new Error(`Failed to accept friend request: ${error.message}`);
   }
 };
 
-export const rejectFriendRequest = async (requestId: string): Promise<void> => {
+export const rejectFriendRequest = async (requestId: string, userId: string): Promise<void> => {
   try {
     const requestRef = doc(db, 'friendRequests', requestId);
-    await updateDoc(requestRef, { status: 'rejected' });
+
+    await runTransaction(db, async (transaction) => {
+      // Read friend request - MUST be first read in transaction
+      const requestSnap = await transaction.get(requestRef);
+      if (!requestSnap.exists()) {
+        throw new Error('Friend request not found');
+      }
+
+      const requestData = requestSnap.data() as FriendRequest;
+      
+      // Validate current user owns the request (is the recipient)
+      if (requestData.toUserId !== userId) {
+        throw new Error('Unauthorized: This friend request is not for you');
+      }
+
+      // Validate request is still pending (idempotency: allow rejecting already-rejected requests)
+      if (requestData.status === 'accepted') {
+        throw new Error('Cannot reject an already accepted friend request');
+      }
+
+      // Update request status to rejected (idempotent - can reject already rejected)
+      transaction.update(requestRef, { status: 'rejected' });
+    });
   } catch (error: any) {
+    // Re-throw custom errors as-is
+    if (error.message.includes('not found') || 
+        error.message.includes('Unauthorized') ||
+        error.message.includes('already accepted')) {
+      throw error;
+    }
     throw new Error(`Failed to reject friend request: ${error.message}`);
   }
 };
