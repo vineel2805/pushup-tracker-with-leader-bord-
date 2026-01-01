@@ -418,9 +418,9 @@ export function SettingsPage() {
   return (
     <div className="min-h-screen bg-zinc-950">
       {/* Two-panel layout container */}
-      <div className="flex max-w-4xl mx-auto">
-        {/* Left Sidebar */}
-        <aside className="w-48 flex-shrink-0 border-r border-zinc-800/40 min-h-screen">
+      <div className="flex flex-col lg:flex-row max-w-4xl mx-auto">
+        {/* Left Sidebar - Hidden on mobile, shown as horizontal tabs */}
+        <aside className="hidden lg:block w-48 flex-shrink-0 border-r border-zinc-800/40 min-h-screen">
           <div className="sticky top-0 py-5 px-3">
             {/* Settings Title */}
             <h1 className="text-sm font-medium text-zinc-400 mb-4 px-2">Settings</h1>
@@ -440,8 +440,32 @@ export function SettingsPage() {
           </div>
         </aside>
 
+        {/* Mobile Tabs */}
+        <div className="lg:hidden border-b border-zinc-800/40 px-4 py-3">
+          <h1 className="text-lg font-medium text-white mb-3">Settings</h1>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors flex-shrink-0 ${
+                    activeTab === tab.id
+                      ? 'bg-emerald-500/10 text-emerald-500'
+                      : 'text-zinc-400 hover:bg-zinc-800'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Right Content Panel */}
-        <main className="flex-1 min-w-0 py-5 px-8">
+        <main className="flex-1 min-w-0 py-4 lg:py-5 px-4 lg:px-8">
           {/* Section Header */}
           <div className="mb-5">
             <h2 className="text-base font-medium text-white">

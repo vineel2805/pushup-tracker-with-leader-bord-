@@ -115,15 +115,15 @@ export function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center px-6">
+    <div className="min-h-screen bg-black flex items-center justify-center px-4 lg:px-6 py-8">
       <div className="w-full max-w-md">
-        <div className="flex justify-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-xl flex items-center justify-center">
-            <Activity className="w-10 h-10 text-white" />
+        <div className="flex justify-center mb-6 lg:mb-8">
+          <div className="w-14 h-14 lg:w-16 lg:h-16 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-xl flex items-center justify-center">
+            <Activity className="w-8 h-8 lg:w-10 lg:h-10 text-white" />
           </div>
         </div>
 
-        <h1 className="text-3xl text-white text-center mb-8">Create Account</h1>
+        <h1 className="text-2xl lg:text-3xl text-white text-center mb-6 lg:mb-8">Create Account</h1>
 
         {error && (
           <div className="mb-4 p-4 bg-red-500/10 border border-red-500/50 rounded-lg text-red-500 text-sm">
@@ -131,9 +131,9 @@ export function SignupPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-5 lg:space-y-6">
           <div>
-            <label htmlFor="username" className="block text-zinc-400 mb-2">
+            <label htmlFor="username" className="block text-zinc-400 text-sm mb-2">
               Username
             </label>
             <input
@@ -145,10 +145,10 @@ export function SignupPage() {
                 setUsernameError('');
               }}
               onBlur={handleUsernameBlur}
-              className={`w-full px-4 py-3 bg-zinc-900 border rounded-lg text-white focus:outline-none transition-colors ${
+              className={`w-full px-4 py-3 bg-zinc-900/80 border rounded-lg text-white focus:outline-none transition-colors text-base ${
                 usernameError
                   ? 'border-red-500 focus:border-red-500'
-                  : 'border-zinc-800 focus:border-emerald-500'
+                  : 'border-zinc-800/60 focus:border-emerald-500'
               }`}
               placeholder="fitguru123"
               required
@@ -166,7 +166,7 @@ export function SignupPage() {
           </div>
 
           <div>
-            <label htmlFor="email" className="block text-zinc-400 mb-2">
+            <label htmlFor="email" className="block text-zinc-400 text-sm mb-2">
               Email
             </label>
             <input
@@ -174,7 +174,7 @@ export function SignupPage() {
               id="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:outline-none focus:border-emerald-500 transition-colors"
+              className="w-full px-4 py-3 bg-zinc-900/80 border border-zinc-800/60 rounded-lg text-white focus:outline-none focus:border-emerald-500 transition-colors text-base"
               placeholder="you@example.com"
               required
               disabled={loading}
@@ -182,7 +182,7 @@ export function SignupPage() {
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-zinc-400 mb-2">
+            <label htmlFor="password" className="block text-zinc-400 text-sm mb-2">
               Password
             </label>
             <input
@@ -190,10 +190,10 @@ export function SignupPage() {
               id="password"
               value={password}
               onChange={(e) => handlePasswordChange(e.target.value)}
-              className={`w-full px-4 py-3 bg-zinc-900 border rounded-lg text-white focus:outline-none transition-colors ${
+              className={`w-full px-4 py-3 bg-zinc-900/80 border rounded-lg text-white focus:outline-none transition-colors text-base ${
                 passwordError
                   ? 'border-red-500 focus:border-red-500'
-                  : 'border-zinc-800 focus:border-emerald-500'
+                  : 'border-zinc-800/60 focus:border-emerald-500'
               }`}
               placeholder="••••••••"
               required

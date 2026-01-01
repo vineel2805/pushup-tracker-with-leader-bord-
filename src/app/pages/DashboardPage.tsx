@@ -79,27 +79,27 @@ export function DashboardPage() {
     .slice(0, 3);
 
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-3xl text-white mb-2">Welcome back, {userProfile?.username || 'User'}!</h1>
-        <p className="text-zinc-400">Here's your fitness summary</p>
+    <div className="p-4 lg:p-8">
+      <div className="mb-6 lg:mb-8">
+        <h1 className="text-2xl lg:text-3xl text-white mb-2">Welcome back, {userProfile?.username || 'User'}!</h1>
+        <p className="text-zinc-400 text-sm lg:text-base">Here's your fitness summary</p>
       </div>
 
       {/* Profile Section */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-8">
-        <div className="flex items-start gap-4">
+      <div className="bg-zinc-900/50 rounded-xl p-4 lg:p-6 mb-6 lg:mb-8">
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
           {userProfile?.avatarUrl ? (
             <img
               src={userProfile.avatarUrl}
               alt={userProfile.username}
-              className="w-20 h-20 rounded-full object-cover"
+              className="w-16 h-16 lg:w-20 lg:h-20 rounded-full object-cover"
             />
           ) : (
-            <InitialsAvatar name={userProfile?.username || 'User'} size={80} className="w-20 h-20 rounded-full" />
+            <InitialsAvatar name={userProfile?.username || 'User'} size={80} className="w-16 h-16 lg:w-20 lg:h-20 rounded-full" />
           )}
-          <div className="flex-1">
-            <h2 className="text-2xl text-white mb-1">{userProfile?.username || 'User'}</h2>
-            <p className="text-zinc-400 mb-3">{userProfile?.email || ''}</p>
+          <div className="flex-1 text-center sm:text-left">
+            <h2 className="text-xl lg:text-2xl text-white mb-1">{userProfile?.username || 'User'}</h2>
+            <p className="text-zinc-400 text-sm lg:text-base mb-3">{userProfile?.email || ''}</p>
             {userProfile?.bio && (
               <p className="text-zinc-300 text-sm leading-relaxed">{userProfile.bio}</p>
             )}
@@ -111,7 +111,7 @@ export function DashboardPage() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-6 mb-6 lg:mb-8">
         <StatCard
           title="Today's Push-Ups"
           value={getTodaysPushUps(sessions)}
@@ -139,11 +139,11 @@ export function DashboardPage() {
       </div>
 
       {/* Chart and Leaderboard */}
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
         {/* 7-Day Chart */}
-        <div className="lg:col-span-2 bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-          <h2 className="text-xl text-white mb-6">Last 7 Days</h2>
-          <ResponsiveContainer width="100%" height={250}>
+        <div className="lg:col-span-2 bg-zinc-900/50 rounded-xl p-4 lg:p-6">
+          <h2 className="text-lg lg:text-xl text-white mb-4 lg:mb-6">Last 7 Days</h2>
+          <ResponsiveContainer width="100%" height={200}>
             <LineChart data={last7Days}>
               <XAxis 
                 dataKey="day" 
@@ -176,9 +176,9 @@ export function DashboardPage() {
         </div>
 
         {/* Top Friends Leaderboard */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl text-white">Top Friends</h2>
+        <div className="bg-zinc-900/50 rounded-xl p-4 lg:p-6">
+          <div className="flex items-center justify-between mb-4 lg:mb-6">
+            <h2 className="text-lg lg:text-xl text-white">Top Friends</h2>
             <Link 
               to="/friends" 
               className="text-sm text-emerald-500 hover:text-emerald-400 transition-colors"
@@ -220,17 +220,17 @@ export function DashboardPage() {
       </div>
 
       {/* Quick Action */}
-      <div className="mt-6">
+      <div className="mt-4 lg:mt-6">
         <Link
           to="/track"
-          className="block w-full p-6 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-xl hover:from-emerald-600 hover:to-cyan-600 transition-all"
+          className="block w-full p-4 lg:p-6 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-xl hover:from-emerald-600 hover:to-cyan-600 transition-all"
         >
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-xl text-white mb-1">Start a Session</h3>
-              <p className="text-emerald-50">Track your push-ups now</p>
+              <h3 className="text-lg lg:text-xl text-white mb-1">Start a Session</h3>
+              <p className="text-emerald-50 text-sm lg:text-base">Track your push-ups now</p>
             </div>
-            <Activity className="w-8 h-8 text-white" />
+            <Activity className="w-6 h-6 lg:w-8 lg:h-8 text-white" />
           </div>
         </Link>
       </div>

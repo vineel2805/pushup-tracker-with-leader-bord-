@@ -791,20 +791,20 @@ export function TrackPage() {
       {cameraEnabled && (
         <>
           {/* Top Bar - Feedback and State */}
-          <div className="absolute top-6 left-6 right-6 z-10 flex flex-col gap-3">
-            <div className="bg-black/80 text-white px-6 py-3 rounded-xl font-semibold backdrop-blur-sm">
+          <div className="absolute top-4 lg:top-6 left-4 lg:left-6 right-4 lg:right-6 z-10 flex flex-col gap-2 lg:gap-3">
+            <div className="bg-black/80 text-white px-4 lg:px-6 py-2 lg:py-3 rounded-xl text-sm lg:text-base font-semibold backdrop-blur-sm">
               {feedback}
             </div>
             
             {error && (
-              <div className="bg-red-600/90 text-white px-4 py-2 rounded-xl text-sm flex items-center gap-2">
+              <div className="bg-red-600/90 text-white px-3 lg:px-4 py-2 rounded-xl text-xs lg:text-sm flex items-center gap-2">
                 <AlertCircle size={16} />
                 {error}
               </div>
             )}
 
             {isTracking && (
-              <div className={`px-4 py-2 rounded-xl font-bold text-sm uppercase tracking-wider self-start ${
+              <div className={`px-3 lg:px-4 py-1.5 lg:py-2 rounded-xl font-bold text-xs lg:text-sm uppercase tracking-wider self-start ${
                 state === 'get_ready' ? 'bg-yellow-500/80' :
                 state === 'plank' ? 'bg-blue-500/80' :
                 state === 'down' ? 'bg-red-500/80' :
@@ -816,73 +816,73 @@ export function TrackPage() {
           </div>
 
           {/* Stats - Top Right Corner */}
-          <div className="absolute top-6 right-6 z-10 flex flex-col items-end gap-2">
-            <div className="bg-black/80 backdrop-blur-sm rounded-xl px-6 py-3 text-right">
-              <div className="text-white text-5xl font-bold">{count}</div>
-              <div className="text-white/70 text-sm font-medium">Push-ups</div>
+          <div className="absolute top-4 lg:top-6 right-4 lg:right-6 z-10 flex flex-col items-end gap-2">
+            <div className="bg-black/80 backdrop-blur-sm rounded-xl px-4 lg:px-6 py-2 lg:py-3 text-right">
+              <div className="text-white text-3xl lg:text-5xl font-bold">{count}</div>
+              <div className="text-white/70 text-xs lg:text-sm font-medium">Push-ups</div>
             </div>
             
-            <div className="bg-black/80 backdrop-blur-sm rounded-xl px-6 py-3 text-right">
-              <div className="text-white text-2xl font-semibold">{formatTime(duration)}</div>
-              <div className="text-white/70 text-xs font-medium">Duration</div>
+            <div className="bg-black/80 backdrop-blur-sm rounded-xl px-4 lg:px-6 py-2 lg:py-3 text-right">
+              <div className="text-white text-xl lg:text-2xl font-semibold">{formatTime(duration)}</div>
+              <div className="text-white/70 text-[10px] lg:text-xs font-medium">Duration</div>
             </div>
             
-            <div className={`px-4 py-2 rounded-xl ${
+            <div className={`px-3 lg:px-4 py-1.5 lg:py-2 rounded-xl ${
               poseDetected ? 'bg-green-600/80' : 'bg-red-600/80'
-            } text-white text-sm font-medium`}>
+            } text-white text-xs lg:text-sm font-medium`}>
               {poseDetected ? '✓ Pose Detected' : '✗ No Pose'}
             </div>
           </div>
 
           {/* Control buttons - Bottom Center */}
-          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 z-10">
+          <div className="absolute bottom-20 lg:bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-3 lg:gap-4 z-10">
             {!isTracking && !sessionEnded ? (
               <button
                 onClick={startTracking}
                 disabled={!poseDetected && poseRef.current !== null}
-                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-10 py-4 rounded-full font-bold text-lg shadow-lg transition-colors flex items-center gap-3"
+                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-6 lg:px-10 py-3 lg:py-4 rounded-full font-bold text-sm lg:text-lg shadow-lg transition-colors flex items-center gap-2 lg:gap-3"
               >
-                <Play size={24} fill="white" />
+                <Play size={20} fill="white" />
                 Start Tracking
               </button>
             ) : isTracking ? (
               <>
                 <button
                   onClick={togglePause}
-                  className="bg-cyan-600 hover:bg-cyan-700 text-white px-8 py-4 rounded-full font-bold shadow-lg transition-colors flex items-center gap-2"
+                  className="bg-cyan-600 hover:bg-cyan-700 text-white px-5 lg:px-8 py-3 lg:py-4 rounded-full font-bold shadow-lg transition-colors flex items-center gap-2 text-sm lg:text-base"
                 >
                   {isPaused ? (
                     <>
-                      <Play size={20} fill="white" />
+                      <Play size={18} fill="white" />
                       Resume
                     </>
                   ) : (
                     <>
-                      <Pause size={20} fill="white" />
+                      <Pause size={18} fill="white" />
                       Pause
                     </>
                   )}
                 </button>
                 <button
                   onClick={endTracking}
-                  className="bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-full font-bold shadow-lg transition-colors flex items-center gap-2"
+                  className="bg-red-600 hover:bg-red-700 text-white px-5 lg:px-8 py-3 lg:py-4 rounded-full font-bold shadow-lg transition-colors flex items-center gap-2 text-sm lg:text-base"
                 >
-                  <Square size={20} fill="white" />
-                  End Session
+                  <Square size={18} fill="white" />
+                  End
                 </button>
               </>
             ) : sessionEnded && count > 0 && !isSessionSaved ? (
               <button
                 onClick={saveSession}
                 disabled={isSaving || !currentUser || count === 0}
-                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-600 disabled:opacity-50 text-white px-10 py-4 rounded-full font-bold shadow-lg transition-colors flex items-center gap-3"
+                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-600 disabled:opacity-50 text-white px-6 lg:px-10 py-3 lg:py-4 rounded-full font-bold shadow-lg transition-colors flex items-center gap-2 lg:gap-3 text-sm lg:text-base"
               >
-                <Save size={24} />
+                <Save size={20} />
                 {isSaving ? 'Saving...' : 'Save Session'}
               </button>
             ) : sessionEnded && isSessionSaved ? (
-              <div className="bg-emerald-600 text-white px-10 py-4 rounded-full font-bold shadow-lg flex items-center gap-3">
-                <Save size={24} />
+              <div className="bg-emerald-600 text-white px-6 lg:px-10 py-3 lg:py-4 rounded-full font-bold shadow-lg flex items-center gap-2 lg:gap-3 text-sm lg:text-base">
+                <Save size={20} />
                 Session Saved!
               </div>
             ) : null}
@@ -891,10 +891,10 @@ export function TrackPage() {
           {/* Camera flip button */}
           <button
             onClick={toggleCamera}
-            className="absolute bottom-8 right-6 z-10 bg-black/60 hover:bg-black/80 text-white p-4 rounded-full transition-colors shadow-lg"
+            className="absolute bottom-6 lg:bottom-8 right-4 lg:right-6 z-10 bg-black/60 hover:bg-black/80 text-white p-3 lg:p-4 rounded-full transition-colors shadow-lg"
             title="Flip Camera"
           >
-            <RotateCw size={24} />
+            <RotateCw size={20} />
           </button>
 
           {/* Camera disable button */}
@@ -903,10 +903,10 @@ export function TrackPage() {
               setCameraEnabled(false);
               setIsTracking(false);
             }}
-            className="absolute bottom-8 left-6 z-10 bg-black/60 hover:bg-black/80 text-white p-4 rounded-full transition-colors shadow-lg"
+            className="absolute bottom-6 lg:bottom-8 left-4 lg:left-6 z-10 bg-black/60 hover:bg-black/80 text-white p-3 lg:p-4 rounded-full transition-colors shadow-lg"
             title="Disable Camera"
           >
-            <CameraOff size={24} />
+            <CameraOff size={20} />
           </button>
         </>
       )}

@@ -292,30 +292,30 @@ export function FriendsPage() {
   };
 
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-3xl text-white mb-2">Friends & Leaderboards</h1>
-        <p className="text-zinc-400">Compete with friends and track rankings</p>
+    <div className="p-4 lg:p-8">
+      <div className="mb-6 lg:mb-8">
+        <h1 className="text-2xl lg:text-3xl text-white mb-2">Friends & Leaderboards</h1>
+        <p className="text-zinc-400 text-sm lg:text-base">Compete with friends and track rankings</p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-8">
+      <div className="flex gap-2 mb-6 lg:mb-8">
         <button
           onClick={() => setActiveTab('leaderboard')}
-          className={`px-6 py-3 rounded-lg transition-colors ${
+          className={`flex-1 sm:flex-none px-4 lg:px-6 py-2.5 lg:py-3 rounded-lg transition-colors text-sm lg:text-base ${
             activeTab === 'leaderboard'
               ? 'bg-emerald-500 text-white'
-              : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+              : 'bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700'
           }`}
         >
           Leaderboard
         </button>
         <button
           onClick={() => setActiveTab('friends')}
-          className={`px-6 py-3 rounded-lg transition-colors ${
+          className={`flex-1 sm:flex-none px-4 lg:px-6 py-2.5 lg:py-3 rounded-lg transition-colors text-sm lg:text-base ${
             activeTab === 'friends'
               ? 'bg-emerald-500 text-white'
-              : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+              : 'bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700'
           }`}
         >
           Friends ({friends.length})
@@ -325,78 +325,78 @@ export function FriendsPage() {
       {activeTab === 'leaderboard' && (
         <>
           {/* Leaderboard Filters */}
-          <div className="flex flex-wrap gap-4 mb-8">
-            <div className="flex gap-2">
+          <div className="mb-6 lg:mb-8 overflow-x-auto pb-2">
+            <div className="flex gap-2 min-w-max">
               <button
                 onClick={() => setLeaderboardType('weekly')}
-                className={`px-4 py-2 rounded-lg transition-colors ${
+                className={`px-3 lg:px-4 py-2 rounded-lg transition-colors text-sm ${
                   leaderboardType === 'weekly'
                     ? 'bg-cyan-500 text-white'
-                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                    : 'bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700'
                 }`}
               >
                 <div className="flex items-center gap-2">
                   <TrendingUp className="w-4 h-4" />
-                  Weekly
+                  <span className="hidden sm:inline">Weekly</span>
                 </div>
               </button>
               <button
                 onClick={() => setLeaderboardType('monthly')}
-                className={`px-4 py-2 rounded-lg transition-colors ${
+                className={`px-3 lg:px-4 py-2 rounded-lg transition-colors text-sm ${
                   leaderboardType === 'monthly'
                     ? 'bg-cyan-500 text-white'
-                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                    : 'bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700'
                 }`}
               >
                 <div className="flex items-center gap-2">
                   <Target className="w-4 h-4" />
-                  Monthly
+                  <span className="hidden sm:inline">Monthly</span>
                 </div>
               </button>
               <button
                 onClick={() => setLeaderboardType('best')}
-                className={`px-4 py-2 rounded-lg transition-colors ${
+                className={`px-3 lg:px-4 py-2 rounded-lg transition-colors text-sm ${
                   leaderboardType === 'best'
                     ? 'bg-cyan-500 text-white'
-                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                    : 'bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700'
                 }`}
               >
                 <div className="flex items-center gap-2">
                   <Trophy className="w-4 h-4" />
-                  Best Session
+                  <span className="hidden sm:inline">Best Session</span>
                 </div>
               </button>
               <button
                 onClick={() => setLeaderboardType('streak')}
-                className={`px-4 py-2 rounded-lg transition-colors ${
+                className={`px-3 lg:px-4 py-2 rounded-lg transition-colors text-sm ${
                   leaderboardType === 'streak'
                     ? 'bg-cyan-500 text-white'
-                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                    : 'bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700'
                 }`}
               >
                 <div className="flex items-center gap-2">
                   <Flame className="w-4 h-4" />
-                  Streak
+                  <span className="hidden sm:inline">Streak</span>
                 </div>
               </button>
             </div>
           </div>
 
           {/* Leaderboard */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-            <div className="p-4 border-b border-zinc-800">
-              <h2 className="text-xl text-white">{getMetricLabel()}</h2>
+          <div className="bg-zinc-900/50 rounded-xl overflow-hidden">
+            <div className="p-4 border-b border-zinc-800/60">
+              <h2 className="text-lg lg:text-xl text-white">{getMetricLabel()}</h2>
             </div>
-            <div className="divide-y divide-zinc-800">
+            <div className="divide-y divide-zinc-800/60">
               {leaderboard.map((item, index) => (
                 <div
                   key={item.id}
-                  className="p-4 hover:bg-zinc-800/50 transition-colors"
+                  className="p-3 lg:p-4 hover:bg-zinc-800/50 transition-colors"
                 >
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3 lg:gap-4">
                     {/* Rank */}
                     <div
-                      className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                      className={`w-8 h-8 lg:w-10 lg:h-10 rounded-lg flex items-center justify-center text-sm ${
                         index === 0
                           ? 'bg-yellow-500/20 text-yellow-500'
                           : index === 1
@@ -414,15 +414,15 @@ export function FriendsPage() {
                       <img
                         src={item.avatarUrl}
                         alt={item.username}
-                        className="w-12 h-12 rounded-full object-cover"
+                        className="w-10 h-10 lg:w-12 lg:h-12 rounded-full object-cover"
                       />
                     ) : (
-                      <InitialsAvatar name={item.username} size={48} className="w-12 h-12 rounded-full" />
+                      <InitialsAvatar name={item.username} size={48} className="w-10 h-10 lg:w-12 lg:h-12 rounded-full" />
                     )}
 
                     {/* Username */}
-                    <div className="flex-1">
-                      <p className="text-white">{item.username}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white text-sm lg:text-base truncate">{item.username}</p>
                       {item.id === currentUser?.uid && (
                         <span className="text-xs text-emerald-500">You</span>
                       )}
@@ -431,7 +431,7 @@ export function FriendsPage() {
                     {/* Trend */}
                     {item.trend && leaderboardType === 'weekly' && (
                       <div
-                        className={`flex items-center gap-1 ${
+                        className={`hidden sm:flex items-center gap-1 ${
                           Number(item.trend) >= 0 ? 'text-emerald-500' : 'text-red-500'
                         }`}
                       >
@@ -446,7 +446,7 @@ export function FriendsPage() {
 
                     {/* Value */}
                     <div className="text-right">
-                      <p className="text-2xl text-emerald-500">{item.value}</p>
+                      <p className="text-xl lg:text-2xl text-emerald-500">{item.value}</p>
                       <p className="text-xs text-zinc-500">
                         {leaderboardType === 'streak' ? 'days' : 'push-ups'}
                       </p>
@@ -463,39 +463,39 @@ export function FriendsPage() {
         <>
           {/* Friend Requests */}
           {friendRequests.filter(r => r.status === 'pending').length > 0 && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
-              <h2 className="text-xl text-white mb-4">Friend Requests</h2>
+            <div className="bg-zinc-900/50 rounded-xl p-4 lg:p-6 mb-4 lg:mb-6">
+              <h2 className="text-lg lg:text-xl text-white mb-4">Friend Requests</h2>
               <div className="space-y-3">
                 {friendRequests
                   .filter(r => r.status === 'pending')
                   .map(request => (
                     <div
                       key={request.id}
-                      className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-lg"
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 lg:p-4 bg-zinc-800/50 rounded-lg"
                     >
                       <div className="flex items-center gap-3">
                         <img
                           src={request.fromAvatarUrl}
                           alt={request.fromUsername}
-                          className="w-12 h-12 rounded-full"
+                          className="w-10 h-10 lg:w-12 lg:h-12 rounded-full"
                         />
                         <div>
-                          <p className="text-white">{request.fromUsername}</p>
-                          <p className="text-sm text-zinc-400">Wants to be friends</p>
+                          <p className="text-white text-sm lg:text-base">{request.fromUsername}</p>
+                          <p className="text-xs lg:text-sm text-zinc-400">Wants to be friends</p>
                         </div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 ml-auto">
                         <button
                           onClick={() => handleAcceptRequest(request.id)}
                           className="p-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg transition-colors"
                         >
-                          <Check className="w-5 h-5 text-white" />
+                          <Check className="w-4 h-4 lg:w-5 lg:h-5 text-white" />
                         </button>
                         <button
                           onClick={() => handleRejectRequest(request.id)}
                           className="p-2 bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
                         >
-                          <X className="w-5 h-5 text-white" />
+                          <X className="w-4 h-4 lg:w-5 lg:h-5 text-white" />
                         </button>
                       </div>
                     </div>
@@ -505,23 +505,25 @@ export function FriendsPage() {
           )}
 
           {/* Friends List */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl text-white">Your Friends</h2>
+          <div className="bg-zinc-900/50 rounded-xl p-4 lg:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <h2 className="text-lg lg:text-xl text-white">Your Friends</h2>
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowSuggestionsDialog(true)}
-                  className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg transition-colors flex items-center gap-2"
+                  className="flex-1 sm:flex-none px-3 lg:px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
                 >
                   <Users className="w-4 h-4" />
-                  Find Friends
+                  <span className="hidden sm:inline">Find Friends</span>
+                  <span className="sm:hidden">Find</span>
                 </button>
                 <button
                   onClick={() => setShowSearchDialog(true)}
-                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors flex items-center gap-2"
+                  className="flex-1 sm:flex-none px-3 lg:px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
                 >
                   <UserPlus className="w-4 h-4" />
-                  Add Friend
+                  <span className="hidden sm:inline">Add Friend</span>
+                  <span className="sm:hidden">Add</span>
                 </button>
               </div>
             </div>
@@ -534,28 +536,28 @@ export function FriendsPage() {
                 return (
                   <div
                     key={friend.id}
-                    className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-lg hover:bg-zinc-800 transition-colors"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 lg:p-4 bg-zinc-800/50 rounded-lg hover:bg-zinc-800 transition-colors"
                   >
                     <div className="flex items-center gap-3 flex-1">
                       {friend.avatarUrl ? (
                         <img
                           src={friend.avatarUrl}
                           alt={friend.username}
-                          className="w-12 h-12 rounded-full object-cover"
+                          className="w-10 h-10 lg:w-12 lg:h-12 rounded-full object-cover"
                         />
                       ) : (
-                        <InitialsAvatar name={friend.username} size={48} className="w-12 h-12 rounded-full" />
+                        <InitialsAvatar name={friend.username} size={48} className="w-10 h-10 lg:w-12 lg:h-12 rounded-full" />
                       )}
-                      <div className="flex-1">
-                        <p className="text-white">{friend.username}</p>
-                        <p className="text-sm text-zinc-400">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-sm lg:text-base truncate">{friend.username}</p>
+                        <p className="text-xs lg:text-sm text-zinc-400">
                           {weeklyTotal} push-ups this week
                         </p>
                       </div>
                     </div>
                     <button
                       onClick={() => handleRemoveFriend(friend.id)}
-                      className="px-4 py-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                      className="self-end sm:self-auto px-3 lg:px-4 py-1.5 lg:py-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors text-sm"
                     >
                       Remove
                     </button>

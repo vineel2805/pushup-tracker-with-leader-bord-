@@ -75,45 +75,45 @@ export function HistoryPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-3xl text-white mb-2">History</h1>
-        <p className="text-zinc-400">View all your push-up sessions</p>
+    <div className="p-4 lg:p-8">
+      <div className="mb-6 lg:mb-8">
+        <h1 className="text-2xl lg:text-3xl text-white mb-2">History</h1>
+        <p className="text-zinc-400 text-sm lg:text-base">View all your push-up sessions</p>
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-6">
         <div className="flex items-center gap-2 text-zinc-400">
           <Filter className="w-5 h-5" />
-          <span>Filter:</span>
+          <span className="text-sm lg:text-base">Filter:</span>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 overflow-x-auto pb-1">
           <button
             onClick={() => setFilter('all')}
-            className={`px-4 py-2 rounded-lg transition-colors ${
+            className={`flex-shrink-0 px-3 lg:px-4 py-2 rounded-lg transition-colors text-sm ${
               filter === 'all'
                 ? 'bg-emerald-500 text-white'
-                : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                : 'bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700'
             }`}
           >
             All Time
           </button>
           <button
             onClick={() => setFilter('month')}
-            className={`px-4 py-2 rounded-lg transition-colors ${
+            className={`flex-shrink-0 px-3 lg:px-4 py-2 rounded-lg transition-colors text-sm ${
               filter === 'month'
                 ? 'bg-emerald-500 text-white'
-                : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                : 'bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700'
             }`}
           >
             Last Month
           </button>
           <button
             onClick={() => setFilter('week')}
-            className={`px-4 py-2 rounded-lg transition-colors ${
+            className={`flex-shrink-0 px-3 lg:px-4 py-2 rounded-lg transition-colors text-sm ${
               filter === 'week'
                 ? 'bg-emerald-500 text-white'
-                : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                : 'bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700'
             }`}
           >
             Last Week
@@ -122,64 +122,64 @@ export function HistoryPage() {
       </div>
 
       {/* Calendar View Summary */}
-      <div className="grid md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 lg:gap-6 mb-6 lg:mb-8">
+        <div className="bg-zinc-900/50 rounded-xl p-4 lg:p-6">
           <div className="flex items-center gap-3 mb-3">
             <Calendar className="w-5 h-5 text-emerald-500" />
-            <span className="text-zinc-400">Total Sessions</span>
+            <span className="text-zinc-400 text-sm lg:text-base">Total Sessions</span>
           </div>
-          <p className="text-3xl text-white">{filteredSessions.length}</p>
+          <p className="text-2xl lg:text-3xl text-white">{filteredSessions.length}</p>
         </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+        <div className="bg-zinc-900/50 rounded-xl p-4 lg:p-6">
           <div className="flex items-center gap-3 mb-3">
             <TrendingUp className="w-5 h-5 text-emerald-500" />
-            <span className="text-zinc-400">Total Push-Ups</span>
+            <span className="text-zinc-400 text-sm lg:text-base">Total Push-Ups</span>
           </div>
-          <p className="text-3xl text-white">
+          <p className="text-2xl lg:text-3xl text-white">
             {filteredSessions.reduce((sum, s) => sum + s.pushUps, 0)}
           </p>
         </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+        <div className="bg-zinc-900/50 rounded-xl p-4 lg:p-6">
           <div className="flex items-center gap-3 mb-3">
             <Clock className="w-5 h-5 text-emerald-500" />
-            <span className="text-zinc-400">Total Time</span>
+            <span className="text-zinc-400 text-sm lg:text-base">Total Time</span>
           </div>
-          <p className="text-3xl text-white">
+          <p className="text-2xl lg:text-3xl text-white">
             {Math.floor(filteredSessions.reduce((sum, s) => sum + s.duration, 0) / 60)}m
           </p>
         </div>
       </div>
 
       {/* Session List */}
-      <div className="space-y-6">
+      <div className="space-y-4 lg:space-y-6">
         {Object.entries(groupedSessions).map(([date, daySessions]) => (
-          <div key={date} className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-            <h3 className="text-lg text-white mb-4">{formatDate(date)}</h3>
-            <div className="space-y-3">
+          <div key={date} className="bg-zinc-900/50 rounded-xl p-4 lg:p-6">
+            <h3 className="text-base lg:text-lg text-white mb-3 lg:mb-4">{formatDate(date)}</h3>
+            <div className="space-y-2 lg:space-y-3">
               {daySessions.map((session) => (
                 <div
                   key={session.id}
-                  className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-lg"
+                  className="flex items-center justify-between p-3 lg:p-4 bg-zinc-800/50 rounded-lg"
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-emerald-500/10 rounded-lg flex items-center justify-center">
-                      <span className="text-xl text-emerald-500">{session.pushUps}</span>
+                  <div className="flex items-center gap-3 lg:gap-4">
+                    <div className="w-10 h-10 lg:w-12 lg:h-12 bg-emerald-500/10 rounded-lg flex items-center justify-center">
+                      <span className="text-lg lg:text-xl text-emerald-500">{session.pushUps}</span>
                     </div>
                     <div>
-                      <p className="text-white">Push-Ups</p>
-                      <p className="text-sm text-zinc-400">
+                      <p className="text-white text-sm lg:text-base">Push-Ups</p>
+                      <p className="text-xs lg:text-sm text-zinc-400">
                         {session.sets} {session.sets === 1 ? 'set' : 'sets'}
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-white">{formatDuration(session.duration)}</p>
-                    <p className="text-sm text-zinc-400">Duration</p>
+                    <p className="text-white text-sm lg:text-base">{formatDuration(session.duration)}</p>
+                    <p className="text-xs lg:text-sm text-zinc-400">Duration</p>
                   </div>
                 </div>
               ))}
             </div>
-            <div className="mt-4 pt-4 border-t border-zinc-800 flex justify-between text-sm">
+            <div className="mt-3 lg:mt-4 pt-3 lg:pt-4 border-t border-zinc-800/60 flex justify-between text-sm">
               <span className="text-zinc-400">Daily Total</span>
               <span className="text-emerald-500">
                 {daySessions.reduce((sum, s) => sum + s.pushUps, 0)} push-ups

@@ -55,7 +55,7 @@ function AuthenticatedLayoutContent({ children }: { children: React.ReactNode })
       <main 
         className={`flex-1 transition-all duration-300 ease-in-out ${
           isMobile 
-            ? 'ml-0' 
+            ? 'ml-0 pt-16' 
             : isCollapsed 
               ? 'ml-16' 
               : 'ml-64'
