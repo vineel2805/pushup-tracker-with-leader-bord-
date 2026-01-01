@@ -17,7 +17,7 @@ import {
   FriendRequest,
   User,
 } from '../services/firestoreService';
-import { doc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, runTransaction, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import {
   getWeeklyTotal,
@@ -182,17 +182,36 @@ export function FriendsPage() {
   const handleRemoveFriend = async (friendId: string) => {
     if (!currentUser) return;
     try {
-      // TODO: Implement transactional friend removal for data integrity
-      // Currently using direct update - should be wrapped in transaction
-      const userRef = doc(db, 'users', currentUser.uid);
-      const userSnap = await getDoc(userRef);
-      if (userSnap.exists()) {
-        const currentFriends = userSnap.data().friends || [];
-        await updateDoc(userRef, {
-          friends: currentFriends.filter((id: string) => id !== friendId),
+      const currentUserRef = doc(db, 'users', currentUser.uid);
+      const friendUserRef = doc(db, 'users', friendId);
+
+      await runTransaction(db, async (transaction) => {
+        // Read both user documents first (required by Firestore transactions)
+        const [currentUserSnap, friendUserSnap] = await Promise.all([
+          transaction.get(currentUserRef),
+          transaction.get(friendUserRef),
+        ]);
+
+        if (!currentUserSnap.exists()) {
+          throw new Error('Current user profile not found');
+        }
+
+        // Remove friend from current user's friends list
+        const currentUserFriends = currentUserSnap.data().friends || [];
+        transaction.update(currentUserRef, {
+          friends: currentUserFriends.filter((id: string) => id !== friendId),
           updatedAt: Timestamp.now(),
         });
-      }
+
+        // Remove current user from friend's friends list (if friend exists)
+        if (friendUserSnap.exists()) {
+          const friendUserFriends = friendUserSnap.data().friends || [];
+          transaction.update(friendUserRef, {
+            friends: friendUserFriends.filter((id: string) => id !== currentUser.uid),
+            updatedAt: Timestamp.now(),
+          });
+        }
+      });
     } catch (error) {
       console.error('Error removing friend:', error);
     }

@@ -1,16 +1,33 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Activity, History, TrendingUp, Users, Settings, LogOut, Menu, X } from 'lucide-react';
+import { Home, Activity, History, TrendingUp, Users, Settings, LogOut, Menu, X, User, HelpCircle } from 'lucide-react';
 import { logOut } from '../services/authService';
 import { useSidebar } from '../context/SidebarContext';
+import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from './ui/use-mobile';
 import { Sheet, SheetContent, SheetTitle } from './ui/sheet';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
+import { InitialsAvatar } from './InitialsAvatar';
+import { subscribeToFriendRequests, FriendRequest } from '../services/firestoreService';
+import { useEffect, useState } from 'react';
 
 export function Navigation() {
   const location = useLocation();
   const navigate = useNavigate();
   const { isOpen, isCollapsed, toggleSidebar, closeSidebar, toggleCollapse } = useSidebar();
+  const { currentUser, userProfile } = useAuth();
   const isMobile = useIsMobile();
+  const [pendingFriendRequests, setPendingFriendRequests] = useState<FriendRequest[]>([]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const unsubscribe = subscribeToFriendRequests(currentUser.uid, (requests) => {
+      setPendingFriendRequests(requests);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
 
   const handleLogout = async () => {
     try {
@@ -26,19 +43,19 @@ export function Navigation() {
     { to: '/track', icon: Activity, label: 'Track' },
     { to: '/history', icon: History, label: 'History' },
     { to: '/analytics', icon: TrendingUp, label: 'Analytics' },
-    { to: '/friends', icon: Users, label: 'Friends' },
-    { to: '/settings', icon: Settings, label: 'Settings' },
+    { to: '/friends', icon: Users, label: 'Friends', badgeCount: pendingFriendRequests.length },
   ];
 
   const NavItem = ({ item }: { item: typeof navItems[0] }) => {
     const Icon = item.icon;
     const isActive = location.pathname === item.to;
+    const hasBadge = Boolean(item.badgeCount && item.badgeCount > 0);
     
     const content = (
       <Link
         to={item.to}
         onClick={() => isMobile && closeSidebar()}
-        className={`flex items-center gap-3 rounded-lg transition-colors ${
+        className={`flex items-center gap-3 rounded-lg transition-colors relative ${
           isActive
             ? 'bg-emerald-500/10 text-emerald-500'
             : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
@@ -48,7 +65,15 @@ export function Navigation() {
             : 'px-4 py-3'
         }`}
       >
-        <Icon className="w-5 h-5 shrink-0" />
+        <div className="relative shrink-0 w-8 h-8 flex items-center justify-center">
+          <Icon className="w-5 h-5" />
+          {hasBadge && (
+            <span 
+              className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-[10px] h-[10px] bg-emerald-500 rounded-full z-10"
+              aria-label="New friend request"
+            />
+          )}
+        </div>
         {(!isCollapsed || isMobile) && <span className="truncate">{item.label}</span>}
       </Link>
     );
@@ -61,7 +86,7 @@ export function Navigation() {
               {content}
             </TooltipTrigger>
             <TooltipContent side="right" className="bg-zinc-800 text-white border-zinc-700">
-              {item.label}
+              {hasBadge ? `${item.label} (${item.badgeCount} new request${item.badgeCount! > 1 ? 's' : ''})` : item.label}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -98,20 +123,91 @@ export function Navigation() {
         ))}
       </div>
 
-      <button
-        onClick={() => {
-          handleLogout();
-          isMobile && closeSidebar();
-        }}
-        className={`flex items-center gap-3 rounded-lg text-zinc-400 hover:bg-red-500/10 hover:text-red-500 transition-colors mt-auto ${
-          isCollapsed && !isMobile
-            ? 'justify-center p-3' 
-            : 'px-4 py-3 w-full'
-        }`}
-      >
-        <LogOut className="w-5 h-5 shrink-0" />
-        {(!isCollapsed || isMobile) && <span>Logout</span>}
-      </button>
+      {/* Account Section - Bottom Anchored */}
+      {currentUser && userProfile && (
+        <div className={`mt-auto pt-4 border-t border-zinc-800 ${isCollapsed && !isMobile ? 'px-0' : ''}`}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className={`flex items-center gap-3 rounded-lg text-zinc-300 hover:bg-zinc-800 transition-colors w-full ${
+                  isCollapsed && !isMobile
+                    ? 'justify-center p-2' 
+                    : 'px-3 py-2'
+                }`}
+              >
+                {userProfile.avatarUrl ? (
+                  <img
+                    src={userProfile.avatarUrl}
+                    alt={userProfile.username || 'User'}
+                    className="w-8 h-8 rounded-full object-cover shrink-0"
+                  />
+                ) : (
+                  <InitialsAvatar
+                    name={userProfile.username || currentUser.email || 'User'}
+                    size={32}
+                    className="w-8 h-8 rounded-full shrink-0"
+                  />
+                )}
+                {(!isCollapsed || isMobile) && (
+                  <div className="flex-1 text-left min-w-0">
+                    <div className="text-sm font-medium text-white truncate">
+                      {userProfile.username || 'User'}
+                    </div>
+                    <div className="text-xs text-zinc-400 truncate">
+                      {userProfile.email || currentUser.email || ''}
+                    </div>
+                  </div>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 bg-zinc-900 border-zinc-800 text-white">
+              <DropdownMenuItem
+                onClick={() => {
+                  navigate(`/profile/${userProfile.username}`);
+                  isMobile && closeSidebar();
+                }}
+                className="cursor-pointer focus:bg-zinc-800"
+              >
+                <User className="w-4 h-4 mr-2" />
+                Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  navigate('/settings');
+                  isMobile && closeSidebar();
+                }}
+                className="cursor-pointer focus:bg-zinc-800"
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-zinc-800" />
+              <DropdownMenuItem
+                onClick={() => {
+                  navigate('/help');
+                  isMobile && closeSidebar();
+                }}
+                className="cursor-pointer focus:bg-zinc-800"
+              >
+                <HelpCircle className="w-4 h-4 mr-2" />
+                Help
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-zinc-800" />
+              <DropdownMenuItem
+                onClick={() => {
+                  handleLogout();
+                  isMobile && closeSidebar();
+                }}
+                className="cursor-pointer text-red-400 focus:text-red-400 focus:bg-red-500/10"
+                variant="destructive"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Log out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
     </>
   );
 

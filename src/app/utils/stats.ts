@@ -59,11 +59,17 @@ const getTodayUTC = (): string => {
 
 /**
  * Gets a Date object for today at UTC midnight
- * @returns Date object
+ * @returns Date object (guaranteed non-null since today's date is always valid)
  */
 const getTodayUTCDate = (): Date => {
   const todayStr = getTodayUTC();
-  return dateStringToUTCDate(todayStr);
+  const date = dateStringToUTCDate(todayStr);
+  // Today's date string is always valid, so this should never be null
+  // but we handle it defensively
+  if (!date) {
+    return new Date();
+  }
+  return date;
 };
 
 export const getTodaysPushUps = (sessions: Session[]): number => {

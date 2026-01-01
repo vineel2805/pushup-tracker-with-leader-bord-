@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useRef, useCallback } from 'react';
 import { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChange } from '../services/authService';
 import { getUserProfile, createUserProfile, User } from '../services/firestoreService';
@@ -28,9 +28,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  const isMountedRef = useRef(true);
+  const currentUserRef = useRef<FirebaseUser | null>(null);
 
-  const refreshUserProfile = async (user?: FirebaseUser) => {
-    const userToCheck = user || currentUser;
+  const refreshUserProfile = useCallback(async (user?: FirebaseUser) => {
+    const userToCheck = user || currentUserRef.current;
     if (userToCheck) {
       try {
         let profile = await getUserProfile(userToCheck.uid);
@@ -50,31 +53,90 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           profile = await getUserProfile(userToCheck.uid);
         }
         
-        setUserProfile(profile);
+        if (isMountedRef.current) {
+          setUserProfile(profile);
+        }
       } catch (error) {
         console.error('Error fetching user profile:', error);
-        setUserProfile(null);
+        if (isMountedRef.current) {
+          setUserProfile(null);
+        }
       }
     } else {
-      setUserProfile(null);
+      if (isMountedRef.current) {
+        setUserProfile(null);
+      }
     }
-  };
+  }, []);
 
   useEffect(() => {
+    isMountedRef.current = true;
+    
+    // Track the current auth operation to prevent race conditions
+    let authOperationId = 0;
+    
     const unsubscribe = onAuthStateChange(async (user) => {
+      // Increment operation ID to invalidate any in-flight operations
+      const currentOperationId = ++authOperationId;
+      
+      // Update refs immediately (synchronous)
+      currentUserRef.current = user;
+      
+      if (!isMountedRef.current) return;
+      
       setCurrentUser(user);
       setLoading(true);
 
       if (user) {
-        await refreshUserProfile(user);
+        try {
+          let profile = await getUserProfile(user.uid);
+          
+          // Check if this operation is still valid and component is mounted
+          if (currentOperationId !== authOperationId || !isMountedRef.current) return;
+          
+          // Create profile if it doesn't exist (only for new users)
+          if (!profile && user.email) {
+            const username = user.displayName || user.email.split('@')[0];
+            await createUserProfile(user.uid, {
+              username: username,
+              email: user.email,
+              bio: '',
+              avatarUrl: user.photoURL || null,
+              publicProfile: true,
+              showOnLeaderboard: true,
+              showGraphs: true,
+            });
+            
+            // Check again after async operation
+            if (currentOperationId !== authOperationId || !isMountedRef.current) return;
+            
+            profile = await getUserProfile(user.uid);
+          }
+          
+          // Final check before setting state
+          if (currentOperationId === authOperationId && isMountedRef.current) {
+            setUserProfile(profile);
+            setLoading(false);
+          }
+        } catch (error) {
+          console.error('Error fetching user profile:', error);
+          if (currentOperationId === authOperationId && isMountedRef.current) {
+            setUserProfile(null);
+            setLoading(false);
+          }
+        }
       } else {
-        setUserProfile(null);
+        if (isMountedRef.current) {
+          setUserProfile(null);
+          setLoading(false);
+        }
       }
-
-      setLoading(false);
     });
 
-    return unsubscribe;
+    return () => {
+      isMountedRef.current = false;
+      unsubscribe();
+    };
   }, []);
 
   const value: AuthContextType = {

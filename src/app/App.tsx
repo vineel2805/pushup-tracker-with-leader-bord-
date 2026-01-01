@@ -9,6 +9,7 @@ import { HistoryPage } from './pages/HistoryPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { FriendsPage } from './pages/FriendsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { HelpPage } from './pages/HelpPage';
 import { PublicProfilePage } from './pages/PublicProfilePage';
 import { Navigation } from './components/Navigation';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -144,6 +145,18 @@ function App() {
                   <AuthenticatedLayout>
                     <ErrorBoundary>
                       <SettingsPage />
+                    </ErrorBoundary>
+                  </AuthenticatedLayout>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/help"
+              element={
+                <PrivateRoute>
+                  <AuthenticatedLayout>
+                    <ErrorBoundary>
+                      <HelpPage />
                     </ErrorBoundary>
                   </AuthenticatedLayout>
                 </PrivateRoute>

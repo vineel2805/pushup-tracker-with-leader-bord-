@@ -10,29 +10,73 @@ export function PublicProfilePage() {
   const { username } = useParams<{ username: string }>();
   const [profile, setProfile] = useState<any>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!username) return;
+    if (!username) {
+      setError('No username provided');
+      setLoading(false);
+      return;
+    }
+
+    let unsubscribe: (() => void) | null = null;
+    let isMounted = true;
 
     const loadProfile = async () => {
-      const userProfile = await getUserByUsername(username);
-      setProfile(userProfile);
-      
-      if (userProfile) {
-        const unsubscribe = subscribeToSessions(userProfile.id, (updatedSessions) => {
-          setSessions(updatedSessions);
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const userProfile = await getUserByUsername(username);
+        
+        if (!isMounted) return;
+        
+        if (!userProfile) {
+          setError('User not found');
+          setLoading(false);
+          return;
+        }
+        
+        setProfile(userProfile);
+        
+        unsubscribe = subscribeToSessions(userProfile.id, (updatedSessions) => {
+          if (isMounted) {
+            setSessions(updatedSessions);
+          }
         });
-        return unsubscribe;
+        
+        setLoading(false);
+      } catch (err) {
+        if (isMounted) {
+          setError('Failed to load profile');
+          setLoading(false);
+        }
       }
     };
 
     loadProfile();
+
+    return () => {
+      isMounted = false;
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, [username]);
 
-  if (!profile) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <p className="text-zinc-400">Loading profile...</p>
+      </div>
+    );
+  }
+
+  if (error || !profile) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <p className="text-zinc-400">{error || 'Profile not found'}</p>
       </div>
     );
   }
