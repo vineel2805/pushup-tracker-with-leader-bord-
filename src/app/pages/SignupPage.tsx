@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Activity } from 'lucide-react';
-import { signUp, signInWithGoogle } from '../services/authService';
+import { signUp, signInWithGoogle, validatePasswordStrength } from '../services/authService';
 import { createUserProfile, checkUsernameExists } from '../services/firestoreService';
 import { useAuth } from '../context/AuthContext';
+import { getAuthErrorMessage } from '../utils/authErrors';
 
 export function SignupPage() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState('');
   const [usernameError, setUsernameError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const [loading, setLoading] = useState(false);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const navigate = useNavigate();
@@ -37,12 +40,40 @@ export function SignupPage() {
     }
   };
 
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    setPasswordError('');
+    
+    // Real-time password validation
+    if (value.length > 0) {
+      const validation = validatePasswordStrength(value);
+      if (!validation.valid) {
+        setPasswordError(validation.error);
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setPasswordError('');
     setLoading(true);
 
     try {
+      // Validate Terms & Conditions
+      if (!acceptedTerms) {
+        setError('You must accept the Terms of Service and Privacy Policy to create an account.');
+        setLoading(false);
+        return;
+      }
+
+      // Validate username before creating account
+      if (!username.trim()) {
+        setError('Username is required.');
+        setLoading(false);
+        return;
+      }
+
       // Double-check username before creating account
       const exists = await checkUsernameExists(username.trim());
       if (exists) {
@@ -51,7 +82,16 @@ export function SignupPage() {
         return;
       }
 
-      // Create auth user
+      // Validate password strength (fail fast before Firebase)
+      const passwordValidation = validatePasswordStrength(password);
+      if (!passwordValidation.valid) {
+        setPasswordError(passwordValidation.error || 'Password does not meet requirements.');
+        setError(passwordValidation.error || 'Password does not meet requirements.');
+        setLoading(false);
+        return;
+      }
+
+      // Create auth user (this will send verification email)
       const authUser = await signUp(email, password, username);
       
       // Create user profile in Firestore
@@ -65,10 +105,10 @@ export function SignupPage() {
         showGraphs: true,
       });
 
-      await refreshUserProfile();
-      navigate('/dashboard');
+      // Redirect to email verification page
+      navigate('/verify-email');
     } catch (err: any) {
-      setError(err.message || 'Failed to create account. Please try again.');
+      setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -149,19 +189,30 @@ export function SignupPage() {
               type="password"
               id="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:outline-none focus:border-emerald-500 transition-colors"
+              onChange={(e) => handlePasswordChange(e.target.value)}
+              className={`w-full px-4 py-3 bg-zinc-900 border rounded-lg text-white focus:outline-none transition-colors ${
+                passwordError
+                  ? 'border-red-500 focus:border-red-500'
+                  : 'border-zinc-800 focus:border-emerald-500'
+              }`}
               placeholder="••••••••"
               required
-              minLength={8}
               disabled={loading}
             />
-            <p className="text-xs text-zinc-500 mt-1">Must be at least 8 characters</p>
+            {passwordError ? (
+              <p className="text-xs text-red-500 mt-1">{passwordError}</p>
+            ) : (
+              <p className="text-xs text-zinc-500 mt-1">
+                Must be at least 8 characters with uppercase, lowercase, number, and special character
+              </p>
+            )}
           </div>
 
           <label className="flex items-start gap-2 text-zinc-400">
             <input
               type="checkbox"
+              checked={acceptedTerms}
+              onChange={(e) => setAcceptedTerms(e.target.checked)}
               className="w-4 h-4 bg-zinc-900 border-zinc-800 rounded mt-1"
               required
               disabled={loading}
@@ -198,7 +249,7 @@ export function SignupPage() {
               await refreshUserProfile();
               navigate('/dashboard');
             } catch (err: any) {
-              setError(err.message || 'Failed to sign in with Google. Please try again.');
+              setError(getAuthErrorMessage(err));
             } finally {
               setLoading(false);
             }

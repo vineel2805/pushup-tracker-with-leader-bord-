@@ -11,6 +11,7 @@ import { FriendsPage } from './pages/FriendsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { HelpPage } from './pages/HelpPage';
 import { PublicProfilePage } from './pages/PublicProfilePage';
+import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { Navigation } from './components/Navigation';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SidebarProvider, useSidebar } from './context/SidebarContext';
@@ -24,12 +25,24 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white">Loading...</div>
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+          <div className="text-white text-sm">Loading...</div>
+        </div>
       </div>
     );
   }
 
-  return currentUser ? <>{children}</> : <Navigate to="/login" />;
+  if (!currentUser) {
+    return <Navigate to="/login" />;
+  }
+
+  // Require email verification for all protected routes
+  if (!currentUser.emailVerified) {
+    return <Navigate to="/verify-email" />;
+  }
+
+  return <>{children}</>;
 }
 
 function AuthenticatedLayoutContent({ children }: { children: React.ReactNode }) {
@@ -75,6 +88,7 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route path="/profile/:username" element={<PublicProfilePage />} />
 
             {/* Protected Routes */}

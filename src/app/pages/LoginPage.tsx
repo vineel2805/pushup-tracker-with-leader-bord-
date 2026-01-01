@@ -3,10 +3,12 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Activity } from 'lucide-react';
 import { logIn, signInWithGoogle } from '../services/authService';
 import { useAuth } from '../context/AuthContext';
+import { getAuthErrorMessage } from '../utils/authErrors';
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -18,18 +20,17 @@ export function LoginPage() {
     setLoading(true);
 
     try {
-      await logIn(email, password);
+      const authUser = await logIn(email, password, rememberMe);
       await refreshUserProfile();
-      navigate('/dashboard');
-    } catch (err: any) {
-      let errorMessage = err.message || 'Failed to log in. Please check your credentials.';
-      // Handle specific Firebase errors
-      if (errorMessage.includes('user-not-found') || errorMessage.includes('wrong-password')) {
-        errorMessage = 'Invalid email or password. Please try again.';
-      } else if (errorMessage.includes('too-many-requests')) {
-        errorMessage = 'Too many failed attempts. Please try again later.';
+      
+      // Check if email is verified
+      if (!authUser.emailVerified) {
+        navigate('/verify-email');
+      } else {
+        navigate('/dashboard');
       }
-      setError(errorMessage);
+    } catch (err: any) {
+      setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -42,9 +43,11 @@ export function LoginPage() {
     try {
       await signInWithGoogle();
       await refreshUserProfile();
+      
+      // Check if email is verified (Google accounts are auto-verified)
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.message || 'Failed to sign in with Google. Please try again.');
+      setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -104,6 +107,8 @@ export function LoginPage() {
             <label className="flex items-center gap-2 text-zinc-400">
               <input
                 type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
                 className="w-4 h-4 bg-zinc-900 border-zinc-800 rounded"
                 disabled={loading}
               />

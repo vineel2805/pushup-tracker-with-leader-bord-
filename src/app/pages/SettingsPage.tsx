@@ -1,8 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
-import { User, Eye, Lock, Lock as LockIcon, X, Camera } from 'lucide-react';
+import { User, Eye, Lock, Lock as LockIcon, X, Camera, Trash2, Mail, Link2, Unlink } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { updateUserProfile } from '../services/firestoreService';
-import { changePassword } from '../services/authService';
+import { 
+  changePassword, 
+  validatePasswordStrength, 
+  sendVerificationEmail,
+  linkGoogleAccount,
+  unlinkGoogleAccount,
+  deleteAccount,
+  exportUserData,
+  logOut,
+} from '../services/authService';
 import { uploadAvatar, deleteAvatar } from '../services/avatarService';
 import { ChangeAvatarModal } from '../components/ChangeAvatarModal';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/tooltip';
@@ -18,6 +27,18 @@ import {
   DialogDescription,
   DialogFooter,
 } from '../components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
+import { getAuthErrorMessage } from '../utils/authErrors';
+import { useNavigate } from 'react-router-dom';
 
 type Tab = 'profile' | 'privacy' | 'security';
 
@@ -90,6 +111,16 @@ export function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  
+  // Account deletion state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [exportDataLoading, setExportDataLoading] = useState(false);
+  
+  // OAuth state
+  const [linkLoading, setLinkLoading] = useState(false);
   
   // Avatar state
   const [avatarModalOpen, setAvatarModalOpen] = useState(false);
@@ -100,6 +131,8 @@ export function SettingsPage() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
+  
+  const navigate = useNavigate();
   
   // Track original values for change detection
   const originalValuesRef = useRef<{
@@ -182,6 +215,7 @@ export function SettingsPage() {
     if (!currentUser) return;
 
     setError('');
+    setPasswordError('');
     setSuccess('');
 
     if (newPassword !== confirmPassword) {
@@ -189,8 +223,11 @@ export function SettingsPage() {
       return;
     }
 
-    if (newPassword.length < 8) {
-      setError('Password must be at least 8 characters');
+    // Validate password strength
+    const passwordValidation = validatePasswordStrength(newPassword);
+    if (!passwordValidation.valid) {
+      setPasswordError(passwordValidation.error || 'Password does not meet requirements');
+      setError(passwordValidation.error || 'Password does not meet requirements');
       return;
     }
 
@@ -198,17 +235,124 @@ export function SettingsPage() {
 
     try {
       await changePassword(currentPassword, newPassword);
-      toast.success('Password updated successfully');
+      toast.success('Password updated successfully. You will be logged out for security.');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setPasswordDialogOpen(false);
+      
+      // Wait a moment for toast to show, then logout
+      setTimeout(async () => {
+        await logOut();
+        navigate('/login');
+      }, 2000);
     } catch (err: any) {
-      setError(err.message || 'Failed to change password');
+      setError(getAuthErrorMessage(err));
     } finally {
       setPasswordLoading(false);
     }
   };
+
+  const handleResendVerification = async () => {
+    if (!currentUser) return;
+    
+    setError('');
+    setLoading(true);
+    
+    try {
+      await sendVerificationEmail();
+      toast.success('Verification email sent! Please check your inbox.');
+    } catch (err: any) {
+      setError(getAuthErrorMessage(err));
+      toast.error(getAuthErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLinkGoogle = async () => {
+    setError('');
+    setLinkLoading(true);
+    
+    try {
+      await linkGoogleAccount();
+      toast.success('Google account linked successfully');
+      await refreshUserProfile();
+    } catch (err: any) {
+      setError(getAuthErrorMessage(err));
+      toast.error(getAuthErrorMessage(err));
+    } finally {
+      setLinkLoading(false);
+    }
+  };
+
+  const handleUnlinkGoogle = async () => {
+    setError('');
+    setLinkLoading(true);
+    
+    try {
+      await unlinkGoogleAccount();
+      toast.success('Google account unlinked successfully');
+      await refreshUserProfile();
+    } catch (err: any) {
+      setError(getAuthErrorMessage(err));
+      toast.error(getAuthErrorMessage(err));
+    } finally {
+      setLinkLoading(false);
+    }
+  };
+
+  const handleExportData = async () => {
+    setExportDataLoading(true);
+    
+    try {
+      const data = await exportUserData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `user-data-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('User data exported successfully');
+    } catch (err: any) {
+      toast.error(getAuthErrorMessage(err));
+    } finally {
+      setExportDataLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!currentUser) return;
+
+    setError('');
+    setDeleteLoading(true);
+
+    try {
+      // Check if user has email/password provider
+      const providers = currentUser.providerData.map(p => p.providerId);
+      const password = providers.includes('password') ? deletePassword : undefined;
+      
+      await deleteAccount(password);
+      toast.success('Account deletion initiated. You will be logged out.');
+      
+      // Wait a moment, then logout
+      setTimeout(async () => {
+        await logOut();
+        navigate('/login');
+      }, 2000);
+    } catch (err: any) {
+      setError(getAuthErrorMessage(err));
+      toast.error(getAuthErrorMessage(err));
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const hasGoogleLinked = currentUser?.providerData.some(p => p.providerId === 'google.com') || false;
+  const hasEmailPassword = currentUser?.providerData.some(p => p.providerId === 'password') || false;
 
   const handleAvatarSave = async (file: File | null, defaultUrl?: string) => {
     if (!currentUser) return;
@@ -473,18 +617,86 @@ export function SettingsPage() {
 
           {/* Security Section */}
           {activeTab === 'security' && (
-            <div>
-              <SettingsRow 
-                label="Password" 
-                description="Keep your account secure"
-              >
-                <button
-                  onClick={() => setPasswordDialogOpen(true)}
-                  className="px-3 py-1.5 text-[12px] text-zinc-300 hover:text-white bg-zinc-800/80 hover:bg-zinc-800 rounded-md transition-colors"
+            <div className="space-y-0">
+              {/* Email Verification */}
+              {currentUser && !currentUser.emailVerified && (
+                <SettingsRow 
+                  label="Email Verification" 
+                  description="Verify your email address to access all features"
                 >
-                  Change
-                </button>
+                  <button
+                    onClick={handleResendVerification}
+                    disabled={loading}
+                    className="px-3 py-1.5 text-[12px] text-zinc-300 hover:text-white bg-zinc-800/80 hover:bg-zinc-800 rounded-md transition-colors disabled:opacity-50"
+                  >
+                    {loading ? 'Sending...' : 'Resend Email'}
+                  </button>
+                </SettingsRow>
+              )}
+
+              {/* Password */}
+              {hasEmailPassword && (
+                <SettingsRow 
+                  label="Password" 
+                  description="Keep your account secure"
+                >
+                  <button
+                    onClick={() => setPasswordDialogOpen(true)}
+                    className="px-3 py-1.5 text-[12px] text-zinc-300 hover:text-white bg-zinc-800/80 hover:bg-zinc-800 rounded-md transition-colors"
+                  >
+                    Change
+                  </button>
+                </SettingsRow>
+              )}
+
+              {/* Google Account Linking */}
+              <SettingsRow 
+                label="Google Account" 
+                description={hasGoogleLinked ? "Google account is linked" : "Link your Google account for easy sign-in"}
+              >
+                {hasGoogleLinked ? (
+                  <button
+                    onClick={handleUnlinkGoogle}
+                    disabled={linkLoading || (!hasEmailPassword && currentUser?.providerData.length === 1)}
+                    className="px-3 py-1.5 text-[12px] text-red-400 hover:text-red-300 bg-zinc-800/80 hover:bg-zinc-800 rounded-md transition-colors disabled:opacity-50"
+                    title={!hasEmailPassword && currentUser?.providerData.length === 1 ? "Cannot unlink. Add email/password first." : ""}
+                  >
+                    {linkLoading ? 'Unlinking...' : 'Unlink'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleLinkGoogle}
+                    disabled={linkLoading}
+                    className="px-3 py-1.5 text-[12px] text-zinc-300 hover:text-white bg-zinc-800/80 hover:bg-zinc-800 rounded-md transition-colors disabled:opacity-50"
+                  >
+                    {linkLoading ? 'Linking...' : 'Link Google'}
+                  </button>
+                )}
               </SettingsRow>
+
+              {/* Account Deletion */}
+              <div className="pt-6 border-t border-zinc-800/60 mt-4">
+                <SettingsRow 
+                  label="Delete Account" 
+                  description="Permanently delete your account and all data. This action cannot be undone."
+                >
+                  <button
+                    onClick={() => setDeleteDialogOpen(true)}
+                    className="px-3 py-1.5 text-[12px] text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-md transition-colors"
+                  >
+                    Delete Account
+                  </button>
+                </SettingsRow>
+                <div className="mt-3">
+                  <button
+                    onClick={handleExportData}
+                    disabled={exportDataLoading}
+                    className="text-[11px] text-zinc-500 hover:text-zinc-400 transition-colors disabled:opacity-50"
+                  >
+                    {exportDataLoading ? 'Exporting...' : 'Export my data before deletion'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </main>
@@ -530,12 +742,31 @@ export function SettingsPage() {
                 type="password"
                 id="new-password"
                 value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full h-9 px-3 bg-zinc-800/80 border border-zinc-700/50 rounded-md text-[13px] text-white focus:outline-none focus:border-zinc-600 transition-colors"
+                onChange={(e) => {
+                  setNewPassword(e.target.value);
+                  setPasswordError('');
+                  if (e.target.value) {
+                    const validation = validatePasswordStrength(e.target.value);
+                    if (!validation.valid) {
+                      setPasswordError(validation.error || '');
+                    }
+                  }
+                }}
+                className={`w-full h-9 px-3 bg-zinc-800/80 border rounded-md text-[13px] text-white focus:outline-none transition-colors ${
+                  passwordError
+                    ? 'border-red-500/50 focus:border-red-500'
+                    : 'border-zinc-700/50 focus:border-zinc-600'
+                }`}
                 placeholder="••••••••"
                 disabled={passwordLoading}
               />
-              <p className="text-[11px] text-zinc-600 mt-1">Must be at least 8 characters</p>
+              {passwordError ? (
+                <p className="text-[11px] text-red-400 mt-1">{passwordError}</p>
+              ) : (
+                <p className="text-[11px] text-zinc-600 mt-1">
+                  Must be at least 8 characters with uppercase, lowercase, number, and special character
+                </p>
+              )}
             </div>
 
             <div>
@@ -584,6 +815,59 @@ export function SettingsPage() {
         onSave={handleAvatarSave}
         loading={avatarLoading}
       />
+
+      {/* Account Deletion Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="bg-zinc-900 border-zinc-800/60 text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">Delete Account</AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400">
+              This will permanently delete your account and all associated data. This action cannot be undone.
+              <br /><br />
+              Your account will be marked for deletion and permanently removed after 7 days. You can export your data before deletion.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          {hasEmailPassword && (
+            <div className="py-3">
+              <label htmlFor="delete-password" className="block text-[12px] text-zinc-500 mb-1.5">
+                Enter your password to confirm
+              </label>
+              <input
+                type="password"
+                id="delete-password"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                className="w-full h-9 px-3 bg-zinc-800/80 border border-zinc-700/50 rounded-md text-[13px] text-white focus:outline-none focus:border-zinc-600 transition-colors"
+                placeholder="••••••••"
+                disabled={deleteLoading}
+              />
+            </div>
+          )}
+
+          {error && (
+            <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-md text-red-400 text-[12px]">
+              {error}
+            </div>
+          )}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              className="bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700"
+              disabled={deleteLoading}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteAccount}
+              disabled={deleteLoading || (hasEmailPassword && !deletePassword)}
+              className="bg-red-600 hover:bg-red-500 text-white"
+            >
+              {deleteLoading ? 'Deleting...' : 'Delete Account'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

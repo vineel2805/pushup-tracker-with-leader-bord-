@@ -141,6 +141,54 @@ export const checkUsernameExists = async (username: string): Promise<boolean> =>
   }
 };
 
+/**
+ * Delete all user data from Firestore
+ * Deletes user profile, sessions, and friend requests
+ */
+export const deleteUserData = async (userId: string): Promise<void> => {
+  try {
+    // Delete user profile
+    const userRef = doc(db, 'users', userId);
+    await deleteDoc(userRef);
+
+    // Delete all user sessions
+    const sessionsQuery = query(
+      collection(db, 'sessions'),
+      where('userId', '==', userId)
+    );
+    const sessionsSnapshot = await getDocs(sessionsQuery);
+    const deleteSessionPromises = sessionsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+    await Promise.all(deleteSessionPromises);
+
+    // Delete all friend requests where user is sender or recipient
+    const sentRequestsQuery = query(
+      collection(db, 'friendRequests'),
+      where('fromUserId', '==', userId)
+    );
+    const receivedRequestsQuery = query(
+      collection(db, 'friendRequests'),
+      where('toUserId', '==', userId)
+    );
+    
+    const [sentSnapshot, receivedSnapshot] = await Promise.all([
+      getDocs(sentRequestsQuery),
+      getDocs(receivedRequestsQuery),
+    ]);
+    
+    const deleteRequestPromises = [
+      ...sentSnapshot.docs.map(doc => deleteDoc(doc.ref)),
+      ...receivedSnapshot.docs.map(doc => deleteDoc(doc.ref)),
+    ];
+    await Promise.all(deleteRequestPromises);
+
+    // Note: We don't delete the user from other users' friends arrays
+    // This is intentional - other users' data should remain intact
+    // The user will simply appear as "deleted" in their friends list
+  } catch (error: any) {
+    throw new Error(`Failed to delete user data: ${error.message}`);
+  }
+};
+
 export const searchUsersByUsername = async (
   searchQuery: string,
   currentUserId: string,

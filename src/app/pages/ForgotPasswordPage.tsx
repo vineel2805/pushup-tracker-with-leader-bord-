@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Activity, Mail } from 'lucide-react';
 import { resetPassword } from '../services/authService';
+import { getAuthErrorMessage } from '../utils/authErrors';
 
 export function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -17,9 +18,11 @@ export function ForgotPasswordPage() {
 
     try {
       await resetPassword(email);
+      // Always show success to prevent email enumeration
       setSuccess(true);
     } catch (err: any) {
-      setError(err.message || 'Failed to send password reset email. Please try again.');
+      // Only show error for non-enumeration issues
+      setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
