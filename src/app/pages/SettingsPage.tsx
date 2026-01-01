@@ -1,18 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
-import { User, Eye, Lock, Lock as LockIcon, Save } from 'lucide-react';
+import { User, Eye, Lock, Lock as LockIcon, X, Camera } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { updateUserProfile } from '../services/firestoreService';
 import { changePassword } from '../services/authService';
 import { uploadAvatar, deleteAvatar } from '../services/avatarService';
-import { SettingsToggle } from '../components/SettingsToggle';
-import { SettingsSectionHeader } from '../components/SettingsSectionHeader';
-import { SettingsActionBar } from '../components/SettingsActionBar';
-import { ProfileHeader } from '../components/ProfileHeader';
 import { ChangeAvatarModal } from '../components/ChangeAvatarModal';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/tooltip';
 import { toast } from '../utils/toast';
-import { getInitials, generateInitialsAvatar } from '../utils/avatarUtils';
+import { getInitials } from '../utils/avatarUtils';
 import { getAvatarFromStorage, saveAvatarToStorage, clearAvatarFromStorage } from '../utils/avatarStorage';
+import { Switch } from '../components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -23,6 +20,56 @@ import {
 } from '../components/ui/dialog';
 
 type Tab = 'profile' | 'privacy' | 'security';
+
+// Sidebar Navigation Item Component
+function NavItem({ 
+  icon: Icon, 
+  label, 
+  active, 
+  onClick 
+}: { 
+  icon: React.ElementType; 
+  label: string; 
+  active: boolean; 
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-2.5 px-2 py-2 text-[13px] transition-colors rounded ${
+        active
+          ? 'text-white bg-zinc-800/60'
+          : 'text-zinc-500 hover:text-zinc-300'
+      }`}
+    >
+      <Icon className="w-4 h-4 flex-shrink-0" />
+      <span>{label}</span>
+    </button>
+  );
+}
+
+// Settings Row Component for consistent layout
+function SettingsRow({ 
+  label, 
+  description, 
+  children 
+}: { 
+  label: string; 
+  description?: string; 
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between py-3">
+      <div className="flex-1 pr-4">
+        <div className="text-[13px] text-zinc-300">{label}</div>
+        {description && (
+          <div className="text-[11px] text-zinc-600 mt-0.5 leading-relaxed">{description}</div>
+        )}
+      </div>
+      <div className="flex-shrink-0">{children}</div>
+    </div>
+  );
+}
 
 export function SettingsPage() {
   const { currentUser, userProfile, refreshUserProfile } = useAuth();
@@ -75,13 +122,10 @@ export function SettingsPage() {
       
       // Sync avatar between profile and localStorage
       if (userProfile.avatarUrl) {
-        // Sync profile avatar to localStorage
         saveAvatarToStorage(userProfile.avatarUrl);
       } else {
-        // Load avatar from localStorage if available and profile doesn't have one
         const storedAvatar = getAvatarFromStorage();
         if (storedAvatar && currentUser) {
-          // Sync localStorage avatar to profile if it exists
           updateUserProfile(currentUser.uid, { avatarUrl: storedAvatar })
             .then(() => refreshUserProfile())
             .catch((err) => console.warn('Failed to sync stored avatar:', err));
@@ -126,11 +170,9 @@ export function SettingsPage() {
         showGraphs,
       });
       await refreshUserProfile();
-      setSuccess('Settings saved successfully!');
-      setTimeout(() => setSuccess(''), 3000);
+      toast.success('Settings saved successfully');
     } catch (err: any) {
-      setError(err.message || 'Failed to save settings');
-      setTimeout(() => setError(''), 5000);
+      toast.error(err.message || 'Failed to save settings');
     } finally {
       setLoading(false);
     }
@@ -156,15 +198,13 @@ export function SettingsPage() {
 
     try {
       await changePassword(currentPassword, newPassword);
-      setSuccess('Password updated successfully!');
+      toast.success('Password updated successfully');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setPasswordDialogOpen(false);
-      setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
       setError(err.message || 'Failed to change password');
-      setTimeout(() => setError(''), 5000);
     } finally {
       setPasswordLoading(false);
     }
@@ -178,52 +218,37 @@ export function SettingsPage() {
       let newAvatarUrl: string | null;
 
       if (file) {
-        // Upload new avatar (for file uploads - though we're not using this anymore)
         newAvatarUrl = await uploadAvatar(currentUser.uid, file);
         
-        // Delete old avatar if it exists and is not a data URI or local path
         if (userProfile?.avatarUrl && 
             !userProfile.avatarUrl.startsWith('data:image') && 
             !userProfile.avatarUrl.startsWith('/profile-pics/') &&
             !userProfile.avatarUrl.includes('/src/profile-pics/')) {
-          await deleteAvatar(userProfile.avatarUrl).catch(() => {
-            // Ignore deletion errors
-          });
+          await deleteAvatar(userProfile.avatarUrl).catch(() => {});
         }
         
-        // Save to localStorage
         saveAvatarToStorage(newAvatarUrl);
       } else if (defaultUrl) {
-        // Use selected default avatar from gallery (local image)
         newAvatarUrl = defaultUrl;
         
-        // Delete old avatar if it exists and is a Firebase URL (not local)
         if (userProfile?.avatarUrl && 
             !userProfile.avatarUrl.startsWith('data:image') && 
             !userProfile.avatarUrl.startsWith('/profile-pics/') &&
             !userProfile.avatarUrl.includes('/src/profile-pics/')) {
-          await deleteAvatar(userProfile.avatarUrl).catch(() => {
-            // Ignore deletion errors
-          });
+          await deleteAvatar(userProfile.avatarUrl).catch(() => {});
         }
         
-        // Save to localStorage
         saveAvatarToStorage(newAvatarUrl);
       } else {
-        // Remove avatar - set to null to show initials
         newAvatarUrl = null;
         
-        // Delete old avatar if it exists (only Firebase URLs)
         if (userProfile?.avatarUrl && 
             !userProfile.avatarUrl.startsWith('data:image') && 
             !userProfile.avatarUrl.startsWith('/profile-pics/') &&
             !userProfile.avatarUrl.includes('/src/profile-pics/')) {
-          await deleteAvatar(userProfile.avatarUrl).catch(() => {
-            // Ignore deletion errors
-          });
+          await deleteAvatar(userProfile.avatarUrl).catch(() => {});
         }
         
-        // Clear from localStorage
         clearAvatarFromStorage();
       }
 
@@ -243,231 +268,299 @@ export function SettingsPage() {
     { id: 'security' as Tab, label: 'Security', icon: Lock },
   ];
 
+  const displayName = username || userProfile?.username || 'User';
+  const initials = getInitials(displayName);
+
   return (
-    <div className="p-5 max-w-4xl mx-auto pb-24">
-      <div className="mb-5">
-        <h1 className="text-3xl font-bold text-white mb-1">Settings</h1>
-        <p className="text-zinc-400 text-sm">Manage your account and preferences</p>
-      </div>
-
-      {error && (
-        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded text-red-500 text-sm">
-          {error}
-        </div>
-      )}
-
-      {success && (
-        <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/50 rounded text-emerald-500 text-sm">
-          {success}
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex gap-1 mb-5 border-b border-zinc-800">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                activeTab === tab.id
-                  ? 'border-emerald-500 text-emerald-500'
-                  : 'border-transparent text-zinc-400 hover:text-zinc-300'
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Profile Tab */}
-      {activeTab === 'profile' && (
-        <div>
-          <SettingsSectionHeader icon={User} title="Profile" />
-          
-          {/* Profile Header */}
-          <ProfileHeader
-            avatarUrl={userProfile?.avatarUrl || null}
-            displayName={username || userProfile?.username || 'User'}
-            username={username || userProfile?.username || 'user'}
-            onAvatarClick={() => setAvatarModalOpen(true)}
-          />
-
-          {/* Divider */}
-          <div className="border-b border-zinc-800/50 my-4" />
-
-          {/* Form Fields */}
-          <div className="space-y-4">
-            {/* Username */}
-            <div>
-              <label htmlFor="username" className="block text-sm text-zinc-300 mb-1.5">
-                Username
-              </label>
-              <input
-                type="text"
-                id="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full h-10 px-3 bg-zinc-800 border border-zinc-700 rounded-md text-white focus:outline-none focus:border-emerald-500 transition-colors text-sm"
-              />
-            </div>
-
-            {/* Email */}
-            <div>
-              <label htmlFor="email" className="block text-sm text-zinc-300 mb-1.5">
-                Email
-              </label>
-              <div className="relative">
-                <input
-                  type="email"
-                  id="email"
-                  value={email}
-                  readOnly
-                  className="w-full h-10 px-3 pr-10 bg-zinc-800/50 border border-zinc-700 rounded-md text-zinc-400 cursor-not-allowed text-sm"
-                  aria-label="Email address (read-only)"
+    <div className="min-h-screen bg-zinc-950">
+      {/* Two-panel layout container */}
+      <div className="flex max-w-4xl mx-auto">
+        {/* Left Sidebar */}
+        <aside className="w-48 flex-shrink-0 border-r border-zinc-800/40 min-h-screen">
+          <div className="sticky top-0 py-5 px-3">
+            {/* Settings Title */}
+            <h1 className="text-sm font-medium text-zinc-400 mb-4 px-2">Settings</h1>
+            
+            {/* Navigation */}
+            <nav className="space-y-0.5">
+              {tabs.map((tab) => (
+                <NavItem
+                  key={tab.id}
+                  icon={tab.icon}
+                  label={tab.label}
+                  active={activeTab === tab.id}
+                  onClick={() => setActiveTab(tab.id)}
                 />
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                      <LockIcon className="w-4 h-4 text-zinc-500" aria-hidden="true" />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent className="bg-zinc-900 border border-zinc-700 text-zinc-300 text-xs">
-                    Email cannot be changed
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            </div>
+              ))}
+            </nav>
+          </div>
+        </aside>
 
-            {/* Bio */}
+        {/* Right Content Panel */}
+        <main className="flex-1 min-w-0 py-5 px-8">
+          {/* Section Header */}
+          <div className="mb-5">
+            <h2 className="text-base font-medium text-white">
+              {tabs.find(t => t.id === activeTab)?.label}
+            </h2>
+          </div>
+
+          {/* Profile Section */}
+          {activeTab === 'profile' && (
             <div>
-              <label htmlFor="bio" className="block text-sm text-zinc-300 mb-1.5">
-                Bio
-              </label>
-              <textarea
-                id="bio"
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-                placeholder="Tell us about yourself..."
-                maxLength={500}
-                rows={4}
-                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-white focus:outline-none focus:border-emerald-500 transition-colors resize-none text-sm"
-              />
-              <p className="text-xs text-zinc-500 mt-1">{bio.length}/500</p>
+              {/* Avatar Section */}
+              <div className="flex items-center gap-3.5 mb-5">
+                <button
+                  onClick={() => setAvatarModalOpen(true)}
+                  className="relative group"
+                  disabled={avatarLoading}
+                >
+                  {userProfile?.avatarUrl ? (
+                    <img
+                      src={userProfile.avatarUrl}
+                      alt={displayName}
+                      className="w-14 h-14 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+                      <span className="text-lg font-medium text-white">{initials}</span>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Camera className="w-4 h-4 text-white" />
+                  </div>
+                </button>
+                <div>
+                  <div className="text-[13px] font-medium text-white">{displayName}</div>
+                  <button
+                    onClick={() => setAvatarModalOpen(true)}
+                    className="text-[12px] text-emerald-500 hover:text-emerald-400 transition-colors"
+                  >
+                    Change photo
+                  </button>
+                </div>
+              </div>
+              
+              {/* Subtle divider */}
+              <div className="border-t border-zinc-800/40 mb-4" />
+
+              {/* Form Fields */}
+              <div className="space-y-4">
+                {/* Username */}
+                <div>
+                  <label htmlFor="username" className="block text-[12px] text-zinc-500 mb-1.5">
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    id="username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full h-9 px-3 bg-zinc-900/80 border border-zinc-800/60 rounded-md text-[13px] text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-700 transition-colors"
+                  />
+                </div>
+
+                {/* Email */}
+                <div>
+                  <label htmlFor="email" className="block text-[12px] text-zinc-500 mb-1.5">
+                    Email
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="email"
+                      id="email"
+                      value={email}
+                      readOnly
+                      className="w-full h-9 px-3 pr-9 bg-zinc-900/40 border border-zinc-800/40 rounded-md text-[13px] text-zinc-500 cursor-not-allowed"
+                      aria-label="Email address (read-only)"
+                    />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <LockIcon className="w-3.5 h-3.5 text-zinc-600" aria-hidden="true" />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent className="bg-zinc-800 border-zinc-700 text-zinc-300 text-[11px]">
+                        Email cannot be changed
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                </div>
+
+                {/* Bio */}
+                <div>
+                  <label htmlFor="bio" className="block text-[12px] text-zinc-500 mb-1.5">
+                    Bio
+                  </label>
+                  <textarea
+                    id="bio"
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                    placeholder="Tell us about yourself..."
+                    maxLength={500}
+                    rows={3}
+                    className="w-full px-3 py-2 bg-zinc-900/80 border border-zinc-800/60 rounded-md text-[13px] text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-700 transition-colors resize-none"
+                  />
+                  <p className="text-[11px] text-zinc-600 mt-1">{bio.length}/500</p>
+                </div>
+              </div>
+
+              {/* Save Button */}
+              {hasChanges() && (
+                <div className="pt-5">
+                  <button
+                    onClick={handleSave}
+                    disabled={loading}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md transition-colors text-[13px] font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? 'Saving...' : 'Save changes'}
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
-        </div>
-      )}
+          )}
 
-      {/* Privacy Tab */}
-      {activeTab === 'privacy' && (
-        <div>
-          <SettingsSectionHeader icon={Eye} title="Privacy" />
-          
-          <div className="space-y-2">
-            <SettingsToggle
-              label="Public Profile"
-              checked={publicProfile}
-              onChange={setPublicProfile}
-              tooltip="Allow others to view your profile and search for you"
-            />
-            <SettingsToggle
-              label="Show on Leaderboards"
-              checked={showOnLeaderboard}
-              onChange={setShowOnLeaderboard}
-              tooltip="Appear in friend leaderboards and rankings"
-            />
-            <SettingsToggle
-              label="Show Performance Graphs"
-              checked={showGraphs}
-              onChange={setShowGraphs}
-              tooltip="Display your performance graphs on your public profile"
-            />
-          </div>
-        </div>
-      )}
+          {/* Privacy Section */}
+          {activeTab === 'privacy' && (
+            <div className="space-y-0">
+              <SettingsRow 
+                label="Public profile" 
+                description="Allow others to view your profile"
+              >
+                <Switch 
+                  checked={publicProfile} 
+                  onCheckedChange={setPublicProfile}
+                  className="data-[state=checked]:bg-emerald-600 scale-90"
+                />
+              </SettingsRow>
+              
+              <SettingsRow 
+                label="Show on leaderboards" 
+                description="Appear in rankings"
+              >
+                <Switch 
+                  checked={showOnLeaderboard} 
+                  onCheckedChange={setShowOnLeaderboard}
+                  className="data-[state=checked]:bg-emerald-600 scale-90"
+                />
+              </SettingsRow>
+              
+              <SettingsRow 
+                label="Show performance graphs" 
+                description="Display graphs on public profile"
+              >
+                <Switch 
+                  checked={showGraphs} 
+                  onCheckedChange={setShowGraphs}
+                  className="data-[state=checked]:bg-emerald-600 scale-90"
+                />
+              </SettingsRow>
 
-      {/* Security Tab */}
-      {activeTab === 'security' && (
-        <div>
-          <SettingsSectionHeader icon={Lock} title="Security" />
-          
-          <div>
-            <button
-              onClick={() => setPasswordDialogOpen(true)}
-              className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded transition-colors font-medium text-sm"
-            >
-              Change Password
-            </button>
-          </div>
-        </div>
-      )}
+              {/* Save Button */}
+              {hasChanges() && (
+                <div className="pt-4">
+                  <button
+                    onClick={handleSave}
+                    disabled={loading}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md transition-colors text-[13px] font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? 'Saving...' : 'Save changes'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Security Section */}
+          {activeTab === 'security' && (
+            <div>
+              <SettingsRow 
+                label="Password" 
+                description="Keep your account secure"
+              >
+                <button
+                  onClick={() => setPasswordDialogOpen(true)}
+                  className="px-3 py-1.5 text-[12px] text-zinc-300 hover:text-white bg-zinc-800/80 hover:bg-zinc-800 rounded-md transition-colors"
+                >
+                  Change
+                </button>
+              </SettingsRow>
+            </div>
+          )}
+        </main>
+      </div>
 
       {/* Password Change Dialog */}
       <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 text-white sm:max-w-md [&>button]:text-zinc-400 [&>button]:hover:text-white">
+        <DialogContent className="bg-zinc-900 border-zinc-800/60 text-white sm:max-w-sm [&>button]:text-zinc-500 [&>button]:hover:text-white">
           <DialogHeader>
-            <DialogTitle className="text-white">Change Password</DialogTitle>
-            <DialogDescription className="text-zinc-400">
+            <DialogTitle className="text-white text-[15px] font-medium">Change password</DialogTitle>
+            <DialogDescription className="text-zinc-500 text-[12px]">
               Enter your current password and choose a new one
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-4 py-4">
+          {error && (
+            <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-md text-red-400 text-[12px]">
+              {error}
+            </div>
+          )}
+          
+          <div className="space-y-3 py-1">
             <div>
-              <label htmlFor="current-password" className="block text-sm text-zinc-300 mb-1.5">
-                Current Password
+              <label htmlFor="current-password" className="block text-[12px] text-zinc-500 mb-1.5">
+                Current password
               </label>
               <input
                 type="password"
                 id="current-password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white focus:outline-none focus:border-emerald-500 transition-colors text-sm"
+                className="w-full h-9 px-3 bg-zinc-800/80 border border-zinc-700/50 rounded-md text-[13px] text-white focus:outline-none focus:border-zinc-600 transition-colors"
                 placeholder="••••••••"
                 disabled={passwordLoading}
               />
             </div>
 
             <div>
-              <label htmlFor="new-password" className="block text-sm text-zinc-300 mb-1.5">
-                New Password
+              <label htmlFor="new-password" className="block text-[12px] text-zinc-500 mb-1.5">
+                New password
               </label>
               <input
                 type="password"
                 id="new-password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white focus:outline-none focus:border-emerald-500 transition-colors text-sm"
+                className="w-full h-9 px-3 bg-zinc-800/80 border border-zinc-700/50 rounded-md text-[13px] text-white focus:outline-none focus:border-zinc-600 transition-colors"
                 placeholder="••••••••"
                 disabled={passwordLoading}
               />
-              <p className="text-xs text-zinc-500 mt-1">Must be at least 8 characters</p>
+              <p className="text-[11px] text-zinc-600 mt-1">Must be at least 8 characters</p>
             </div>
 
             <div>
-              <label htmlFor="confirm-password" className="block text-sm text-zinc-300 mb-1.5">
-                Confirm New Password
+              <label htmlFor="confirm-password" className="block text-[12px] text-zinc-500 mb-1.5">
+                Confirm new password
               </label>
               <input
                 type="password"
                 id="confirm-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white focus:outline-none focus:border-emerald-500 transition-colors text-sm"
+                className="w-full h-9 px-3 bg-zinc-800/80 border border-zinc-700/50 rounded-md text-[13px] text-white focus:outline-none focus:border-zinc-600 transition-colors"
                 placeholder="••••••••"
                 disabled={passwordLoading}
               />
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-2 pt-2">
             <button
-              onClick={() => setPasswordDialogOpen(false)}
-              className="px-4 py-2 text-zinc-300 hover:text-white transition-colors text-sm"
+              onClick={() => {
+                setPasswordDialogOpen(false);
+                setError('');
+              }}
+              className="px-3 py-1.5 text-zinc-500 hover:text-white transition-colors text-[12px]"
               disabled={passwordLoading}
             >
               Cancel
@@ -475,9 +568,9 @@ export function SettingsPage() {
             <button
               onClick={handlePasswordChange}
               disabled={passwordLoading || !currentPassword || !newPassword || !confirmPassword}
-              className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
+              className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-[12px] font-medium"
             >
-              {passwordLoading ? 'Updating...' : 'Update Password'}
+              {passwordLoading ? 'Updating...' : 'Update'}
             </button>
           </DialogFooter>
         </DialogContent>
@@ -490,13 +583,6 @@ export function SettingsPage() {
         currentAvatarUrl={userProfile?.avatarUrl || null}
         onSave={handleAvatarSave}
         loading={avatarLoading}
-      />
-
-      {/* Sticky Action Bar */}
-      <SettingsActionBar
-        hasChanges={hasChanges()}
-        onSave={handleSave}
-        loading={loading}
       />
     </div>
   );
