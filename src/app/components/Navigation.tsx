@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Activity, History, TrendingUp, Users, Settings, LogOut, Menu, X, User, HelpCircle } from 'lucide-react';
+import { Home, Activity, History, TrendingUp, Users, Settings, LogOut, Menu, X, User, HelpCircle, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { logOut } from '../services/authService';
 import { useSidebar } from '../context/SidebarContext';
 import { useAuth } from '../context/AuthContext';
@@ -98,24 +98,54 @@ export function Navigation() {
 
   const NavContent = () => (
     <>
-      <div className={`flex items-center gap-3 mb-8 ${isCollapsed && !isMobile ? 'justify-center' : ''}`}>
-        <button
-          onClick={isMobile ? closeSidebar : toggleCollapse}
-          className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-lg flex items-center justify-center hover:opacity-80 transition-opacity shrink-0"
-          aria-label={isMobile ? 'Close sidebar' : isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {isMobile ? (
-            <X className="w-6 h-6 text-white" />
-          ) : isCollapsed ? (
-            <Activity className="w-6 h-6 text-white" />
-          ) : (
-            <X className="w-6 h-6 text-white" />
+      <div className={`flex items-center mb-8 ${isCollapsed && !isMobile ? 'justify-center' : 'justify-between'}`}>
+        {/* Logo and Title */}
+        <div className="flex items-center gap-3">
+          <img 
+            src="/logo.png" 
+            alt="Track & Grow" 
+            className="w-10 h-10 object-cover rounded-lg shrink-0" 
+          />
+          {(!isCollapsed || isMobile) && (
+            <span className="text-xl text-white font-semibold">Track & Grow</span>
           )}
-        </button>
-        {(!isCollapsed || isMobile) && (
-          <span className="text-xl text-white font-semibold">PushUp Tracker</span>
+        </div>
+        
+        {/* Toggle Button - Desktop expanded */}
+        {!isMobile && !isCollapsed && (
+          <button
+            onClick={toggleCollapse}
+            className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
+          >
+            <PanelLeftClose className="w-5 h-5" />
+          </button>
+        )}
+        
+        {/* Close Button - Mobile */}
+        {isMobile && (
+          <button
+            onClick={closeSidebar}
+            className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+            aria-label="Close sidebar"
+          >
+            <X className="w-5 h-5" />
+          </button>
         )}
       </div>
+      
+      {/* Expand Button when collapsed - Desktop only */}
+      {!isMobile && isCollapsed && (
+        <button
+          onClick={toggleCollapse}
+          className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors mb-4 mx-auto flex items-center justify-center"
+          aria-label="Expand sidebar"
+          title="Expand sidebar"
+        >
+          <PanelLeft className="w-5 h-5" />
+        </button>
+      )}
 
       <div className="space-y-1 flex-1">
         {navItems.map((item) => (
