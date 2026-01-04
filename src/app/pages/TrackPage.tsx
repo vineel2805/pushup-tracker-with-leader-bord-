@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Square, Camera, CameraOff, RotateCw, Loader2 } from 'lucide-react';
+import { Play, Pause, Square, Camera, CameraOff, RotateCw, Loader2, Save, Check } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { addSession } from '../services/firestoreService';
 
 // ============================================================================
 // CONFIGURATION - Simple and Relaxed
@@ -155,6 +157,7 @@ class PushUpDetector {
 // MAIN COMPONENT
 // ============================================================================
 export function TrackPage() {
+  const { currentUser } = useAuth();
   const [count, setCount] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isTracking, setIsTracking] = useState(false);
@@ -166,6 +169,8 @@ export function TrackPage() {
   const [modelLoading, setModelLoading] = useState(true);
   const [sessionEnded, setSessionEnded] = useState(false);
   const [currentAngle, setCurrentAngle] = useState(0);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -447,6 +452,7 @@ export function TrackPage() {
     setIsTracking(true);
     setIsPaused(false);
     setSessionEnded(false);
+    setIsSaved(false);
     setFeedback('Start doing push-ups!');
   };
   
@@ -455,6 +461,28 @@ export function TrackPage() {
     setIsPaused(false);
     setSessionEnded(true);
     setFeedback(count > 0 ? `Session complete: ${count} reps` : 'No reps completed');
+  };
+  
+  const saveSession = async () => {
+    if (!currentUser || count === 0 || isSaved) return;
+    
+    setIsSaving(true);
+    try {
+      await addSession({
+        userId: currentUser.uid,
+        pushUps: count,
+        duration,
+        date: new Date().toISOString().split('T')[0],
+        sets: 1,
+      });
+      setIsSaved(true);
+      setFeedback('Session saved!');
+    } catch (error) {
+      console.error('Failed to save session:', error);
+      setFeedback('Failed to save');
+    } finally {
+      setIsSaving(false);
+    }
   };
   
   const formatTime = (s: number) => {
@@ -592,13 +620,40 @@ export function TrackPage() {
               )}
               
               {sessionEnded && (
-                <button
-                  onClick={startTracking}
-                  className="flex-1 max-w-xs bg-zinc-800 hover:bg-zinc-700 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2"
-                >
-                  <RotateCw size={20} />
-                  New Session
-                </button>
+                <div className="flex gap-3 w-full max-w-md">
+                  {count > 0 && currentUser && !isSaved && (
+                    <button
+                      onClick={saveSession}
+                      disabled={isSaving}
+                      className="flex-1 bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-700 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2"
+                    >
+                      {isSaving ? (
+                        <>
+                          <Loader2 size={20} className="animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save size={20} />
+                          Save Session
+                        </>
+                      )}
+                    </button>
+                  )}
+                  {isSaved && (
+                    <div className="flex-1 bg-emerald-500/20 border border-emerald-500/50 text-emerald-400 py-4 rounded-xl font-semibold flex items-center justify-center gap-2">
+                      <Check size={20} />
+                      Saved!
+                    </div>
+                  )}
+                  <button
+                    onClick={startTracking}
+                    className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2"
+                  >
+                    <RotateCw size={20} />
+                    New Session
+                  </button>
+                </div>
               )}
             </div>
           </div>
