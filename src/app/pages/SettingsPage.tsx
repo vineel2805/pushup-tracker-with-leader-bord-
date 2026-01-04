@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { User, Eye, Lock, Lock as LockIcon, X, Camera, Trash2, Mail, Link2, Unlink } from 'lucide-react';
+import { User, Eye, Lock, Lock as LockIcon, X, Camera, Trash2, Mail, Link2, Unlink, Volume2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { updateUserProfile } from '../services/firestoreService';
 import { 
@@ -14,6 +14,7 @@ import {
 } from '../services/authService';
 import { uploadAvatar, deleteAvatar } from '../services/avatarService';
 import { ChangeAvatarModal } from '../components/ChangeAvatarModal';
+import { VoiceAgentSettings } from '../components/VoiceAgentSettings';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/tooltip';
 import { toast } from '../utils/toast';
 import { getInitials } from '../utils/avatarUtils';
@@ -40,7 +41,7 @@ import {
 import { getAuthErrorMessage } from '../utils/authErrors';
 import { useNavigate } from 'react-router-dom';
 
-type Tab = 'profile' | 'privacy' | 'security';
+type Tab = 'profile' | 'privacy' | 'security' | 'voice';
 
 // Sidebar Navigation Item Component
 function NavItem({ 
@@ -410,6 +411,7 @@ export function SettingsPage() {
     { id: 'profile' as Tab, label: 'Profile', icon: User },
     { id: 'privacy' as Tab, label: 'Privacy', icon: Eye },
     { id: 'security' as Tab, label: 'Security', icon: Lock },
+    { id: 'voice' as Tab, label: 'Voice Agent', icon: Volume2 },
   ];
 
   const displayName = username || userProfile?.username || 'User';
@@ -721,6 +723,19 @@ export function SettingsPage() {
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Voice Agent Section */}
+          {activeTab === 'voice' && (
+            <div className="space-y-0">
+              <div className="pb-3 border-b border-zinc-800/40">
+                <h2 className="text-[14px] font-medium text-zinc-200">Voice Agent</h2>
+                <p className="text-[11px] text-zinc-500 mt-0.5">
+                  Configure audio feedback during your workouts
+                </p>
+              </div>
+              <VoiceAgentSettings />
             </div>
           )}
         </main>

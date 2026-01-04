@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Square, Camera, CameraOff, RotateCw, Loader2, Save, Check } from 'lucide-react';
+import { Play, Pause, Square, Camera, CameraOff, RotateCw, Loader2, Save, Check, Volume2, VolumeX } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { addSession } from '../services/firestoreService';
+import { voiceAgent } from '../services/voiceAgentService';
 
 // ============================================================================
 // CONFIGURATION - Simple and Relaxed
@@ -171,6 +172,7 @@ export function TrackPage() {
   const [currentAngle, setCurrentAngle] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(voiceAgent.getConfig().enabled);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -182,6 +184,7 @@ export function TrackPage() {
   const isMountedRef = useRef(true);
   const isTrackingRef = useRef(false);
   const isPausedRef = useRef(false);
+  const lastAnnouncedCountRef = useRef(0);
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -276,6 +279,12 @@ export function TrackPage() {
       
       if (isTrackingRef.current) {
         setFeedback(result.feedback);
+        
+        // Announce new reps via voice agent
+        if (result.count > lastAnnouncedCountRef.current) {
+          voiceAgent.announceRep(result.count);
+          lastAnnouncedCountRef.current = result.count;
+        }
       }
     } else {
       setPoseDetected(false);
@@ -447,6 +456,7 @@ export function TrackPage() {
   
   const startTracking = () => {
     detectorRef.current.reset();
+    lastAnnouncedCountRef.current = 0;
     setCount(0);
     setDuration(0);
     setIsTracking(true);
@@ -454,6 +464,17 @@ export function TrackPage() {
     setSessionEnded(false);
     setIsSaved(false);
     setFeedback('Start doing push-ups!');
+    voiceAgent.announceSessionStart();
+  };
+  
+  const togglePause = () => {
+    if (isPaused) {
+      setIsPaused(false);
+      voiceAgent.announceSessionResume();
+    } else {
+      setIsPaused(true);
+      voiceAgent.announceSessionPause();
+    }
   };
   
   const endTracking = () => {
@@ -461,6 +482,13 @@ export function TrackPage() {
     setIsPaused(false);
     setSessionEnded(true);
     setFeedback(count > 0 ? `Session complete: ${count} reps` : 'No reps completed');
+    voiceAgent.announceSessionEnd(count, duration);
+  };
+  
+  const toggleVoice = () => {
+    const newEnabled = !voiceEnabled;
+    setVoiceEnabled(newEnabled);
+    voiceAgent.saveConfig({ enabled: newEnabled });
   };
   
   const saveSession = async () => {
@@ -527,12 +555,21 @@ export function TrackPage() {
           
           {/* Top bar */}
           <div className="relative z-10 flex items-start justify-between p-4">
-            <button
-              onClick={() => setFacingMode(m => m === 'user' ? 'environment' : 'user')}
-              className="w-12 h-12 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center backdrop-blur-sm"
-            >
-              <RotateCw size={20} />
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setFacingMode(m => m === 'user' ? 'environment' : 'user')}
+                className="w-12 h-12 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center backdrop-blur-sm"
+              >
+                <RotateCw size={20} />
+              </button>
+              <button
+                onClick={toggleVoice}
+                className={`w-12 h-12 ${voiceEnabled ? 'bg-green-500/50' : 'bg-black/50'} hover:bg-black/70 text-white rounded-full flex items-center justify-center backdrop-blur-sm`}
+                title={voiceEnabled ? 'Disable voice' : 'Enable voice'}
+              >
+                {voiceEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
+              </button>
+            </div>
             
             <div className="bg-black/50 backdrop-blur-sm text-white px-6 py-2 rounded-full font-semibold">
               {feedback}
@@ -603,7 +640,7 @@ export function TrackPage() {
               {isTracking && (
                 <div className="flex gap-3 w-full max-w-md">
                   <button
-                    onClick={() => setIsPaused(p => !p)}
+                    onClick={togglePause}
                     className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2"
                   >
                     {isPaused ? <Play size={20} fill="white" /> : <Pause size={20} />}
