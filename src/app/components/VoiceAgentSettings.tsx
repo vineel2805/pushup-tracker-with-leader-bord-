@@ -60,6 +60,7 @@ export function VoiceAgentSettings({ className = '' }: VoiceAgentSettingsProps) 
         <Switch
           checked={config.enabled}
           onCheckedChange={(checked) => updateConfig({ enabled: checked })}
+          className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-zinc-700"
         />
       </div>
 
@@ -85,6 +86,7 @@ export function VoiceAgentSettings({ className = '' }: VoiceAgentSettingsProps) 
                 <Switch
                   checked={config.voiceCommands}
                   onCheckedChange={(checked) => updateConfig({ voiceCommands: checked })}
+                  className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-zinc-700"
                 />
               ) : (
                 <span className="text-[10px] text-red-400 bg-red-500/10 px-2 py-1 rounded">
@@ -145,7 +147,7 @@ export function VoiceAgentSettings({ className = '' }: VoiceAgentSettingsProps) 
               max={100}
               min={0}
               step={5}
-              className="w-full"
+              className="w-full [&_[data-slot=slider-range]]:bg-emerald-500 [&_[data-slot=slider-thumb]]:bg-white [&_[data-slot=slider-thumb]]:border-emerald-500"
             />
           </div>
 
@@ -195,6 +197,7 @@ export function VoiceAgentSettings({ className = '' }: VoiceAgentSettingsProps) 
               <Switch
                 checked={config.announceReps}
                 onCheckedChange={(checked) => updateConfig({ announceReps: checked })}
+                className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-zinc-700"
               />
             </div>
 
@@ -208,6 +211,7 @@ export function VoiceAgentSettings({ className = '' }: VoiceAgentSettingsProps) 
               <Switch
                 checked={config.milestoneAlerts}
                 onCheckedChange={(checked) => updateConfig({ milestoneAlerts: checked })}
+                className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-zinc-700"
               />
             </div>
 
@@ -221,6 +225,7 @@ export function VoiceAgentSettings({ className = '' }: VoiceAgentSettingsProps) 
               <Switch
                 checked={config.motivationalMessages}
                 onCheckedChange={(checked) => updateConfig({ motivationalMessages: checked })}
+                className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-zinc-700"
               />
             </div>
 
@@ -234,6 +239,7 @@ export function VoiceAgentSettings({ className = '' }: VoiceAgentSettingsProps) 
               <Switch
                 checked={config.sessionAnnouncements}
                 onCheckedChange={(checked) => updateConfig({ sessionAnnouncements: checked })}
+                className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-zinc-700"
               />
             </div>
           </div>
