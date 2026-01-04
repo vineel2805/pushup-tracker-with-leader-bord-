@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Activity, TrendingUp, Users, BarChart3, Target, Trophy } from 'lucide-react';
+import { Activity, TrendingUp, Users, BarChart3, Target, Trophy, Mic, Volume2, Camera } from 'lucide-react';
 
 export function LandingPage() {
   return (
@@ -8,10 +8,12 @@ export function LandingPage() {
       <header className="border-b border-zinc-800 bg-zinc-950/50 backdrop-blur-sm fixed w-full z-10">
         <div className="max-w-7xl mx-auto px-4 lg:px-6 py-3 lg:py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 lg:gap-3">
-            <div className="w-8 h-8 lg:w-10 lg:h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-lg flex items-center justify-center">
-              <Activity className="w-5 h-5 lg:w-6 lg:h-6 text-white" />
-            </div>
-            <span className="text-lg lg:text-xl text-white">PushUp Tracker</span>
+            <img 
+              src="/logo.png" 
+              alt="Track & Grow" 
+              className="w-8 h-8 lg:w-10 lg:h-10 rounded-lg object-cover"
+            />
+            <span className="text-lg lg:text-xl text-white font-semibold">Track & Grow</span>
           </div>
           <div className="flex items-center gap-2 lg:gap-4">
             <Link
@@ -33,11 +35,15 @@ export function LandingPage() {
       {/* Hero */}
       <section className="pt-24 lg:pt-32 pb-12 lg:pb-20 px-4 lg:px-6">
         <div className="max-w-7xl mx-auto text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/10 rounded-full text-emerald-400 text-sm mb-6">
+            <Camera className="w-4 h-4" />
+            <span>Pose Detection</span>
+          </div>
           <h1 className="text-3xl sm:text-4xl lg:text-6xl mb-4 lg:mb-6 bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent leading-tight">
-            Track Your Push-Up Progress
+            Track Your Push-Ups
           </h1>
           <p className="text-base lg:text-xl text-zinc-400 mb-6 lg:mb-8 max-w-2xl mx-auto px-4">
-            Monitor your fitness journey with detailed analytics, compete with friends, and stay motivated with streak tracking.
+            Automatic rep counting with computer vision, voice commands for hands-free control, and detailed analytics to track your progress.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 lg:gap-4 justify-center px-4">
             <Link
@@ -68,19 +74,24 @@ export function LandingPage() {
           
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
             <FeatureCard
-              icon={BarChart3}
-              title="History Tracking"
-              description="Track every session with detailed records and visualize your progress over time"
+              icon={Camera}
+              title="Rep Detection"
+              description="Computer vision automatically counts your push-ups in real-time with pose tracking"
+            />
+            <FeatureCard
+              icon={Mic}
+              title="Voice Commands"
+              description="Hands-free control with voice commands: start, pause, stop, save, and more"
+            />
+            <FeatureCard
+              icon={Volume2}
+              title="Audio Feedback"
+              description="Rep announcements, milestone alerts, and motivational cues spoken aloud"
             />
             <FeatureCard
               icon={TrendingUp}
               title="Analytics & Graphs"
               description="Comprehensive charts showing daily, weekly, and monthly progress trends"
-            />
-            <FeatureCard
-              icon={Users}
-              title="Public Profiles"
-              description="Share your achievements with others and showcase your fitness journey"
             />
             <FeatureCard
               icon={Trophy}
@@ -91,11 +102,6 @@ export function LandingPage() {
               icon={Target}
               title="Streak Tracking"
               description="Build consistency with daily streak tracking and milestone celebrations"
-            />
-            <FeatureCard
-              icon={Activity}
-              title="Session Tracking"
-              description="Live counter with timer, set tracking, and pause/resume functionality"
             />
           </div>
         </div>
@@ -122,7 +128,7 @@ export function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-zinc-800 py-6 lg:py-8 px-4 lg:px-6">
         <div className="max-w-7xl mx-auto text-center text-zinc-500 text-sm">
-          <p>© 2025 PushUp Tracker. All rights reserved.</p>
+          <p>© 2026 Track & Grow. All rights reserved.</p>
         </div>
       </footer>
     </div>

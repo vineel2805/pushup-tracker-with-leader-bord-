@@ -1,8 +1,8 @@
-# Push-Up Tracker 
+# Track & Grow 🌱
 
-An AI-powered push-up counter with real-time pose detection, leaderboard, and social features. Built with React, TypeScript, MediaPipe, and Firebase.
+An AI-powered push-up counter with real-time pose detection, voice commands, audio feedback, and social features. Built with React, TypeScript, MediaPipe, and Firebase.
 
-![Push-Up Tracker](https://img.shields.io/badge/version-1.0.0-green) ![React](https://img.shields.io/badge/React-18-blue) ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue) ![Firebase](https://img.shields.io/badge/Firebase-10-orange)
+![Track & Grow](https://img.shields.io/badge/version-2.0.0-green) ![React](https://img.shields.io/badge/React-18-blue) ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue) ![Firebase](https://img.shields.io/badge/Firebase-10-orange)
 
 ## 🎯 Features
 
@@ -11,6 +11,17 @@ An AI-powered push-up counter with real-time pose detection, leaderboard, and so
 - **Live Camera Preview** - See yourself with skeleton overlay and joint highlights
 - **Session Tracking** - Track reps, duration, and save workouts to your profile
 
+### Voice Agent
+- **Voice Commands** - Hands-free control with speech recognition
+  - "Start" / "Pause" / "Resume" / "Stop" - Control your session
+  - "Save" / "Reset" - Save or discard your workout
+  - "Flip camera" - Switch between front and back cameras
+- **Audio Feedback** - Spoken announcements during workouts
+  - Rep count announcements (every 5 reps by default)
+  - Milestone alerts (10, 25, 50, 100 reps)
+  - Motivational messages to keep you going
+  - Session start/stop announcements
+
 ### Social Features
 - **Leaderboard** - Compete with friends and see top performers
 - **Friends System** - Send/accept friend requests and view friends' progress
@@ -18,11 +29,11 @@ An AI-powered push-up counter with real-time pose detection, leaderboard, and so
 
 ### User Experience
 - **User Authentication** - Secure sign-up, login, Google auth, and email verification
-- **Voice Agent** - Audio feedback during workouts with rep announcements, milestone alerts, and motivational messages
-- **Dashboard** - View daily progress and statistics at a glance
+- **Dashboard** - View daily progress, streaks, and statistics at a glance
 - **Analytics** - Visualize your fitness journey with interactive charts
 - **History** - Browse past workout sessions
 - **Settings** - Customize theme, notifications, privacy, and voice agent settings
+- **Collapsible Sidebar** - Clean navigation with expand/collapse toggle
 - **Responsive Design** - Works seamlessly on desktop and mobile
 
 ## 🛠️ Tech Stack
@@ -111,10 +122,11 @@ src/
 │   │   ├── HistoryPage.tsx
 │   │   ├── SettingsPage.tsx
 │   │   └── ...
-│   ├── services/            # Firebase services
+│   ├── services/            # Firebase & app services
 │   │   ├── authService.ts
 │   │   ├── firestoreService.ts
-│   │   └── avatarService.ts
+│   │   ├── avatarService.ts
+│   │   └── voiceAgentService.ts  # Voice commands & audio feedback
 │   └── utils/               # Utility functions
 ├── styles/                  # Global styles
 └── public/                  # Static assets
@@ -169,14 +181,12 @@ firebase deploy
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📄 License
-
-This project is private and not licensed for public use.
-
 ## 👨‍💻 Author
 
 **Vineel** - [GitHub](https://github.com/vineel2805)
 
 ---
+
+
 
 

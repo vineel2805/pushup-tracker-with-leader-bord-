@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { 
   Camera, Play, Square, ChevronDown, Activity,
-  BarChart3, Users, Flame, History, Share2, Plus
+  BarChart3, Users, Flame, History, Share2, Plus, Mic, Volume2
 } from 'lucide-react';
 
 interface FAQItemProps {
@@ -83,6 +83,16 @@ export function HelpPage() {
                 </p>
               </div>
             </div>
+            
+            <div className="flex gap-6">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-zinc-800/50 flex items-center justify-center text-sm text-zinc-400 font-medium">4</div>
+              <div className="pt-1">
+                <h3 className="text-white font-medium mb-1">Use voice commands (optional)</h3>
+                <p className="text-zinc-500 text-sm leading-relaxed">
+                  Enable Voice Agent in Settings for hands-free control. Say "start", "pause", "stop", or "save" to control your session without touching your device.
+                </p>
+              </div>
+            </div>
           </div>
           
           <div className="mt-8 p-4 bg-zinc-900/50 rounded-lg border border-zinc-800/50">
@@ -144,6 +154,62 @@ export function HelpPage() {
                 <p className="text-zinc-500 text-xs leading-relaxed">Share your stats and achievements with anyone.</p>
               </div>
             </div>
+            
+            <div className="flex items-start gap-3">
+              <Mic size={18} className="text-zinc-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h3 className="text-zinc-200 text-sm font-medium mb-1">Voice Commands</h3>
+                <p className="text-zinc-500 text-xs leading-relaxed">Hands-free control with voice recognition.</p>
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-3">
+              <Volume2 size={18} className="text-zinc-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h3 className="text-zinc-200 text-sm font-medium mb-1">Audio Feedback</h3>
+                <p className="text-zinc-500 text-xs leading-relaxed">Rep counts and motivational cues spoken aloud.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Voice Commands */}
+        <section className="mb-16">
+          <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-8">Voice Commands</h2>
+          
+          <p className="text-zinc-500 text-sm mb-6 leading-relaxed">
+            Enable Voice Agent in Settings to control your workout hands-free. Click the microphone button on the Track page to start listening.
+          </p>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-3 bg-zinc-900/50 rounded-lg border border-zinc-800/50">
+              <code className="text-emerald-400 text-sm">"Start"</code>
+              <p className="text-zinc-500 text-xs mt-1">Begin tracking session</p>
+            </div>
+            <div className="p-3 bg-zinc-900/50 rounded-lg border border-zinc-800/50">
+              <code className="text-emerald-400 text-sm">"Pause"</code>
+              <p className="text-zinc-500 text-xs mt-1">Pause current session</p>
+            </div>
+            <div className="p-3 bg-zinc-900/50 rounded-lg border border-zinc-800/50">
+              <code className="text-emerald-400 text-sm">"Resume"</code>
+              <p className="text-zinc-500 text-xs mt-1">Continue paused session</p>
+            </div>
+            <div className="p-3 bg-zinc-900/50 rounded-lg border border-zinc-800/50">
+              <code className="text-emerald-400 text-sm">"Stop"</code>
+              <p className="text-zinc-500 text-xs mt-1">End the session</p>
+            </div>
+            <div className="p-3 bg-zinc-900/50 rounded-lg border border-zinc-800/50">
+              <code className="text-emerald-400 text-sm">"Save"</code>
+              <p className="text-zinc-500 text-xs mt-1">Save completed session</p>
+            </div>
+            <div className="p-3 bg-zinc-900/50 rounded-lg border border-zinc-800/50">
+              <code className="text-emerald-400 text-sm">"Reset"</code>
+              <p className="text-zinc-500 text-xs mt-1">Clear without saving</p>
+            </div>
+            <div className="p-3 bg-zinc-900/50 rounded-lg border border-zinc-800/50 col-span-2">
+              <code className="text-emerald-400 text-sm">"Flip camera"</code>
+              <p className="text-zinc-500 text-xs mt-1">Switch between front and back camera</p>
+            </div>
           </div>
         </section>
 
@@ -171,6 +237,18 @@ export function HelpPage() {
             <FAQItem
               question="Can I edit or delete sessions?"
               answer="Sessions are automatically recorded and cannot be manually edited at this time. This feature may be added in a future update."
+            />
+            <FAQItem
+              question="How do I use voice commands?"
+              answer="Go to Settings and enable Voice Agent. Then on the Track page, click the microphone button to start listening. Speak commands like 'start', 'pause', 'stop', or 'save' to control your session hands-free."
+            />
+            <FAQItem
+              question="Why isn't voice recognition working?"
+              answer="Ensure Voice Agent is enabled in Settings and your browser supports the Web Speech API (Chrome and Edge work best). Check that your microphone is connected and you've granted permission. Speak clearly and wait for the pulsing mic indicator before giving commands."
+            />
+            <FAQItem
+              question="Can I turn off the voice announcements?"
+              answer="Yes. In Settings under Voice Agent, you can toggle individual features like rep announcements, milestone alerts, and motivational messages, or disable the voice agent entirely."
             />
           </div>
         </section>
