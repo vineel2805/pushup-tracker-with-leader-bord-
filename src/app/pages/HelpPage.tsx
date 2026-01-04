@@ -1,177 +1,193 @@
-import { Activity, TrendingUp, Users, Trophy, Target, HelpCircle } from 'lucide-react';
+import { useState } from 'react';
+import { 
+  Camera, Play, Square, ChevronDown, Activity,
+  BarChart3, Users, Flame, History, Share2, Plus
+} from 'lucide-react';
+
+interface FAQItemProps {
+  question: string;
+  answer: string;
+}
+
+function FAQItem({ question, answer }: FAQItemProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  return (
+    <div className="border-b border-zinc-800/50 last:border-0">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between py-5 text-left group"
+      >
+        <span className="text-zinc-200 group-hover:text-white transition-colors pr-4">{question}</span>
+        <ChevronDown 
+          size={18} 
+          className={`flex-shrink-0 text-zinc-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} 
+        />
+      </button>
+      <div className={`grid transition-all duration-200 ${isOpen ? 'grid-rows-[1fr] pb-5' : 'grid-rows-[0fr]'}`}>
+        <div className="overflow-hidden">
+          <p className="text-zinc-500 text-sm leading-relaxed">{answer}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function HelpPage() {
   return (
-    <div className="p-8 max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl text-white mb-2">Help & How to Use</h1>
-        <p className="text-zinc-400">Learn how to get the most out of PushUp Tracker</p>
+    <div className="min-h-screen">
+      <div className="max-w-3xl mx-auto px-6 py-16">
+        
+        {/* Header */}
+        <header className="mb-16">
+          <p className="text-emerald-500 text-sm font-medium tracking-wide uppercase mb-3">Documentation</p>
+          <h1 className="text-4xl font-light text-white mb-4 tracking-tight">
+            Getting Started
+          </h1>
+          <p className="text-zinc-500 text-lg leading-relaxed">
+            Everything you need to track your push-ups and monitor your progress.
+          </p>
+        </header>
+
+        {/* Quick Start */}
+        <section className="mb-16">
+          <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-8">Quick Start</h2>
+          
+          <div className="space-y-6">
+            <div className="flex gap-6">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-zinc-800/50 flex items-center justify-center text-sm text-zinc-400 font-medium">1</div>
+              <div className="pt-1">
+                <h3 className="text-white font-medium mb-1">Enable your camera</h3>
+                <p className="text-zinc-500 text-sm leading-relaxed">
+                  Navigate to Track and allow camera access. Position yourself so your full body is visible in frame.
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex gap-6">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-zinc-800/50 flex items-center justify-center text-sm text-zinc-400 font-medium">2</div>
+              <div className="pt-1">
+                <h3 className="text-white font-medium mb-1">Get into plank position</h3>
+                <p className="text-zinc-500 text-sm leading-relaxed">
+                  Hold a plank with arms extended. The app detects your pose and shows "Ready" when you're set.
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex gap-6">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-zinc-800/50 flex items-center justify-center text-sm text-zinc-400 font-medium">3</div>
+              <div className="pt-1">
+                <h3 className="text-white font-medium mb-1">Start your session</h3>
+                <p className="text-zinc-500 text-sm leading-relaxed">
+                  Press Start and begin. The AI counts each rep automatically. End the session when finished to save.
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-8 p-4 bg-zinc-900/50 rounded-lg border border-zinc-800/50">
+            <p className="text-zinc-400 text-sm">
+              <span className="text-zinc-300">Tip:</span> Side view provides the most accurate detection. Good lighting helps significantly.
+            </p>
+          </div>
+        </section>
+
+        {/* Features */}
+        <section className="mb-16">
+          <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-8">Features</h2>
+          
+          <div className="grid grid-cols-2 gap-x-12 gap-y-8">
+            <div className="flex items-start gap-3">
+              <Activity size={18} className="text-zinc-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h3 className="text-zinc-200 text-sm font-medium mb-1">AI Detection</h3>
+                <p className="text-zinc-500 text-xs leading-relaxed">Real-time pose tracking counts reps automatically.</p>
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-3">
+              <BarChart3 size={18} className="text-zinc-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h3 className="text-zinc-200 text-sm font-medium mb-1">Analytics</h3>
+                <p className="text-zinc-500 text-xs leading-relaxed">Charts and insights across daily, weekly, and monthly views.</p>
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-3">
+              <Flame size={18} className="text-zinc-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h3 className="text-zinc-200 text-sm font-medium mb-1">Streaks</h3>
+                <p className="text-zinc-500 text-xs leading-relaxed">Track consecutive workout days. Miss a day, streak resets.</p>
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-3">
+              <History size={18} className="text-zinc-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h3 className="text-zinc-200 text-sm font-medium mb-1">History</h3>
+                <p className="text-zinc-500 text-xs leading-relaxed">Browse all past sessions with dates and durations.</p>
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-3">
+              <Users size={18} className="text-zinc-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h3 className="text-zinc-200 text-sm font-medium mb-1">Leaderboards</h3>
+                <p className="text-zinc-500 text-xs leading-relaxed">Compete with friends on weekly and monthly rankings.</p>
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-3">
+              <Share2 size={18} className="text-zinc-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h3 className="text-zinc-200 text-sm font-medium mb-1">Public Profiles</h3>
+                <p className="text-zinc-500 text-xs leading-relaxed">Share your stats and achievements with anyone.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* FAQ */}
+        <section className="mb-16">
+          <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-8">Frequently Asked Questions</h2>
+          
+          <div className="border-t border-zinc-800/50">
+            <FAQItem
+              question="Why isn't the app detecting my push-ups?"
+              answer="Ensure your full body is visible in frame, you're in a well-lit environment, and maintaining proper form. Side view typically provides better accuracy than front view."
+            />
+            <FAQItem
+              question="How do streaks work?"
+              answer="Complete at least one session per day to maintain your streak. Days are calculated in UTC. Missing a day resets your current streak to zero."
+            />
+            <FAQItem
+              question="Can I hide my profile from others?"
+              answer="Yes. In Settings, you can toggle your public profile visibility and control whether you appear on leaderboards independently."
+            />
+            <FAQItem
+              question="How do I change my avatar?"
+              answer="Go to Settings and click on your current profile picture in the Profile section to select a new avatar."
+            />
+            <FAQItem
+              question="Can I edit or delete sessions?"
+              answer="Sessions are automatically recorded and cannot be manually edited at this time. This feature may be added in a future update."
+            />
+          </div>
+        </section>
+
+        {/* Footer CTA */}
+        <section className="text-center pt-8 border-t border-zinc-800/30">
+          <p className="text-zinc-600 text-sm mb-4">Ready to start?</p>
+          <a 
+            href="/track" 
+            className="inline-flex items-center gap-2 text-emerald-500 hover:text-emerald-400 text-sm font-medium transition-colors"
+          >
+            <Play size={14} fill="currentColor" />
+            <span>Begin tracking</span>
+          </a>
+        </section>
+        
       </div>
-
-      {/* Overview */}
-      <section className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
-        <div className="flex items-center gap-3 mb-4">
-          <Activity className="w-6 h-6 text-emerald-500" />
-          <h2 className="text-2xl text-white">What is PushUp Tracker?</h2>
-        </div>
-        <p className="text-zinc-300 leading-relaxed">
-          PushUp Tracker is a fitness application designed to help you track, monitor, and improve your push-up workouts. 
-          The app uses real-time pose detection technology to automatically count your push-ups, track your progress over time, 
-          and compete with friends on leaderboards.
-        </p>
-      </section>
-
-      {/* Tracking Sessions */}
-      <section className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
-        <div className="flex items-center gap-3 mb-4">
-          <Target className="w-6 h-6 text-emerald-500" />
-          <h2 className="text-2xl text-white">How to Track Push-Up Sessions</h2>
-        </div>
-        <div className="space-y-4 text-zinc-300">
-          <div>
-            <h3 className="text-lg text-white mb-2">1. Enable Camera</h3>
-            <p className="leading-relaxed">
-              Navigate to the <strong className="text-white">Track</strong> page and enable your camera. 
-              Position yourself so your full body is visible in the frame.
-            </p>
-          </div>
-          <div>
-            <h3 className="text-lg text-white mb-2">2. Get into Position</h3>
-            <p className="leading-relaxed">
-              Get into a plank position with your arms extended. The app will detect when you're in the correct position 
-              and display "Perfect! Ready to start" when you're ready.
-            </p>
-          </div>
-          <div>
-            <h3 className="text-lg text-white mb-2">3. Start Your Workout</h3>
-            <p className="leading-relaxed">
-              Click the <strong className="text-white">Start Tracking</strong> button to begin. The app will automatically 
-              count your push-ups as you perform them. You can pause and resume at any time.
-            </p>
-          </div>
-          <div>
-            <h3 className="text-lg text-white mb-2">4. Complete Your Session</h3>
-            <p className="leading-relaxed">
-              When you're done, click <strong className="text-white">Stop</strong> to end the session. Your push-up count 
-              and session duration will be automatically saved to your history.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Streaks and Analytics */}
-      <section className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
-        <div className="flex items-center gap-3 mb-4">
-          <TrendingUp className="w-6 h-6 text-emerald-500" />
-          <h2 className="text-2xl text-white">Streaks and Analytics</h2>
-        </div>
-        <div className="space-y-4 text-zinc-300">
-          <div>
-            <h3 className="text-lg text-white mb-2">Current Streak</h3>
-            <p className="leading-relaxed">
-              Your current streak shows how many consecutive days you've completed at least one push-up session. 
-              The streak resets if you miss a day.
-            </p>
-          </div>
-          <div>
-            <h3 className="text-lg text-white mb-2">Longest Streak</h3>
-            <p className="leading-relaxed">
-              This tracks your personal best for consecutive days with push-up sessions. Try to beat your record!
-            </p>
-          </div>
-          <div>
-            <h3 className="text-lg text-white mb-2">Analytics Dashboard</h3>
-            <p className="leading-relaxed">
-              Visit the <strong className="text-white">Analytics</strong> page to view detailed charts showing your progress 
-              over the last 7 days, 30 days, or all time. You can see trends, weekly totals, monthly totals, and more.
-            </p>
-          </div>
-          <div>
-            <h3 className="text-lg text-white mb-2">History</h3>
-            <p className="leading-relaxed">
-              The <strong className="text-white">History</strong> page displays all your past sessions with dates, 
-              push-up counts, and durations. Use this to review your workout patterns and progress.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Friends and Leaderboards */}
-      <section className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
-        <div className="flex items-center gap-3 mb-4">
-          <Users className="w-6 h-6 text-emerald-500" />
-          <h2 className="text-2xl text-white">Friends and Leaderboards</h2>
-        </div>
-        <div className="space-y-4 text-zinc-300">
-          <div>
-            <h3 className="text-lg text-white mb-2">Adding Friends</h3>
-            <p className="leading-relaxed">
-              Go to the <strong className="text-white">Friends</strong> page and search for users by username. 
-              Send friend requests to connect with others. When someone sends you a request, you'll see a notification 
-              badge on the Friends icon in the sidebar.
-            </p>
-          </div>
-          <div>
-            <h3 className="text-lg text-white mb-2">Leaderboards</h3>
-            <p className="leading-relaxed">
-              Compete with your friends on weekly, monthly, and all-time leaderboards. The leaderboard shows who has 
-              completed the most push-ups in each time period. You can toggle your visibility on leaderboards in Settings.
-            </p>
-          </div>
-          <div>
-            <h3 className="text-lg text-white mb-2">Public Profiles</h3>
-            <p className="leading-relaxed">
-              Each user has a public profile that shows their stats, achievements, and progress graphs. 
-              You can share your profile link with others to showcase your fitness journey.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* FAQs */}
-      <section className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
-        <div className="flex items-center gap-3 mb-4">
-          <HelpCircle className="w-6 h-6 text-emerald-500" />
-          <h2 className="text-2xl text-white">Frequently Asked Questions</h2>
-        </div>
-        <div className="space-y-4 text-zinc-300">
-          <div>
-            <h3 className="text-lg text-white mb-2">Q: Why isn't the app detecting my push-ups?</h3>
-            <p className="leading-relaxed">
-              Make sure your full body is visible in the camera frame, you're in a well-lit area, and you're performing 
-              push-ups with proper form. The app works best when you maintain a consistent plank position.
-            </p>
-          </div>
-          <div>
-            <h3 className="text-lg text-white mb-2">Q: Can I manually edit a session?</h3>
-            <p className="leading-relaxed">
-              Currently, sessions are automatically recorded when you complete a tracking session. Manual editing may be 
-              available in future updates.
-            </p>
-          </div>
-          <div>
-            <h3 className="text-lg text-white mb-2">Q: How do streaks work?</h3>
-            <p className="leading-relaxed">
-              A streak counts consecutive days where you complete at least one push-up session. The streak resets if you 
-              miss a day. Sessions are counted based on UTC time to ensure consistency.
-            </p>
-          </div>
-          <div>
-            <h3 className="text-lg text-white mb-2">Q: Can I make my profile private?</h3>
-            <p className="leading-relaxed">
-              Yes! Go to Settings and toggle your public profile visibility. You can also control whether you appear 
-              on leaderboards.
-            </p>
-          </div>
-          <div>
-            <h3 className="text-lg text-white mb-2">Q: How do I change my avatar?</h3>
-            <p className="leading-relaxed">
-              Click on your profile picture in the bottom-left account section of the sidebar, then select "Settings". 
-              In the Profile tab, you can change your avatar by clicking on your current profile picture.
-            </p>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }

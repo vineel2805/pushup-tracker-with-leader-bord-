@@ -1,76 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Square, Camera, CameraOff, RotateCw, AlertCircle, Save, Activity } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { addSession } from '../services/firestoreService';
+import { Play, Pause, Square, Camera, CameraOff, RotateCw, Loader2 } from 'lucide-react';
 
-type PushUpState = 'get_ready' | 'plank' | 'down' | 'up';
-type ViewMode = 'front' | 'left_side' | 'right_side' | 'unknown';
-
-// Constants - Optimized for accuracy
-const CONSTANTS = {
-  // Timing - faster response
-  MIN_STATE_CHANGE_MS: 150,
-  MIN_REP_DURATION_MS: 500,
-  GRACE_PERIOD_MS: 1500,
-  SAVE_RETRY_ATTEMPTS: 3,
+// ============================================================================
+// CONFIGURATION - Simple and Relaxed
+// ============================================================================
+const CONFIG = {
+  // Elbow angle thresholds (degrees) - VERY RELAXED
+  UP_ANGLE: 140,              // Arms fairly straight = up position
+  DOWN_ANGLE: 100,            // Elbows bent = down position
   
-  // Visibility thresholds
-  VISIBILITY_THRESHOLD: 0.35,
-  VISIBILITY_HIGH: 0.65,
-  VISIBILITY_LOW: 0.45,
-  VISIBILITY_FRONT_MIN: 0.55,
+  // Timing
+  MIN_REP_TIME_MS: 300,       // Minimum time for valid rep
   
-  // FPS settings
-  POSE_FPS_DESKTOP: 30,
-  POSE_FPS_MOBILE: 20,
-  UI_SYNC_FPS: 12,
+  // Visibility - VERY RELAXED
+  MIN_VISIBILITY: 0.2,        // Accept lower visibility
   
-  // Front-view angles - refined
-  PLANK_BACK_ANGLE: 135,
-  PLANK_ELBOW_ANGLE: 140,
-  DOWN_ELBOW_ANGLE: 85,
-  UP_ELBOW_ANGLE: 140,
-  ELBOW_FLARE_THRESHOLD: 50,
-  BACK_ALIGNMENT_MIN: 125,
-  
-  // Side-view thresholds - more sensitive
-  SIDE_PLANK_ELBOW_ANGLE: 135,
-  SIDE_DOWN_ELBOW_ANGLE: 85,
-  SIDE_UP_ELBOW_ANGLE: 135,
-  SHOULDER_DROP_RATIO: 0.075,
-  SHOULDER_STABLE_TOLERANCE: 0.035,
-  
-  // Depth detection
-  FRONT_VIEW_Z_DIFF_MAX: 0.6,
-  SIDE_VIEW_Z_DIFF_MIN: 0.15,
+  // FPS
+  POSE_FPS: 20,
+  UI_FPS: 15,
 };
 
-// Camera constraints
-const getCameraConstraints = (facingMode: 'user' | 'environment') => {
-  const isMobile = isMobileDevice();
-  return {
-    video: {
-      facingMode: facingMode,
-      width: { ideal: isMobile ? 720 : 1280 },
-      height: { ideal: isMobile ? 540 : 720 },
-      frameRate: { ideal: isMobile ? 20 : 30 },
-      aspectRatio: isMobile ? { ideal: 4 / 3 } : { ideal: 16 / 9 },
-    },
-  };
-};
-
-const isMobileDevice = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-    (window.innerWidth <= 768);
-};
-
-const getPoseFPS = (): number => {
-  return isMobileDevice() ? CONSTANTS.POSE_FPS_MOBILE : CONSTANTS.POSE_FPS_DESKTOP;
-};
-
+// MediaPipe landmark indices
 const LM = {
   NOSE: 0,
+  LEFT_EYE: 2,
+  RIGHT_EYE: 5,
   LEFT_SHOULDER: 11,
   RIGHT_SHOULDER: 12,
   LEFT_ELBOW: 13,
@@ -85,265 +39,248 @@ const LM = {
   RIGHT_ANKLE: 28,
 };
 
-// Calculate angle between three points
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+const isMobile = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth <= 768;
+
+const getCameraConstraints = (facing: 'user' | 'environment') => ({
+  video: {
+    facingMode: facing,
+    width: { ideal: isMobile() ? 720 : 1280 },
+    height: { ideal: isMobile() ? 540 : 720 },
+    frameRate: { ideal: CONFIG.POSE_FPS },
+  },
+});
+
+const isVisible = (lm: any) => lm && lm.visibility >= CONFIG.MIN_VISIBILITY;
+
+// Calculate angle between three points (in degrees)
 const calculateAngle = (a: any, b: any, c: any): number => {
   const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
-  let degrees = Math.abs((radians * 180) / Math.PI);
-  if (degrees > 180) degrees = 360 - degrees;
-  return degrees;
+  let angle = Math.abs(radians * 180 / Math.PI);
+  if (angle > 180) angle = 360 - angle;
+  return angle;
 };
 
-// Check if landmark is visible
-const isLandmarkVisible = (landmark: any, minVisibility = 0.5): boolean => {
-  return landmark && landmark.visibility !== undefined && landmark.visibility >= minVisibility;
-};
+// ============================================================================
+// PUSH-UP DETECTION LOGIC - SIMPLIFIED
+// ============================================================================
+type State = 'up' | 'down';
 
-// Enhanced view detection with multiple checks
-const detectViewMode = (landmarks: any[]): ViewMode => {
-  const leftShoulder = landmarks[LM.LEFT_SHOULDER];
-  const rightShoulder = landmarks[LM.RIGHT_SHOULDER];
-  const leftHip = landmarks[LM.LEFT_HIP];
-  const rightHip = landmarks[LM.RIGHT_HIP];
+class PushUpDetector {
+  state: State = 'up';
+  count = 0;
+  lastRepTime = 0;
   
-  if (!leftShoulder || !rightShoulder) return 'unknown';
+  reset() {
+    this.state = 'up';
+    this.count = 0;
+    this.lastRepTime = 0;
+  }
   
-  const leftVis = leftShoulder.visibility ?? 0;
-  const rightVis = rightShoulder.visibility ?? 0;
-  const leftZ = leftShoulder.z ?? 0;
-  const rightZ = rightShoulder.z ?? 0;
-  const zDiff = Math.abs(leftZ - rightZ);
-  
-  // Front view: both shoulders visible AND at similar depth
-  if (leftVis >= CONSTANTS.VISIBILITY_FRONT_MIN && rightVis >= CONSTANTS.VISIBILITY_FRONT_MIN) {
-    if (zDiff < CONSTANTS.FRONT_VIEW_Z_DIFF_MAX) {
-      // Additional check: hips should also be visible
-      if (leftHip && rightHip && 
-          (leftHip.visibility ?? 0) > 0.4 && 
-          (rightHip.visibility ?? 0) > 0.4) {
-        return 'front';
+  detect(landmarks: any[]): { state: State; count: number; feedback: string; angle: number } {
+    const now = Date.now();
+    
+    // Get landmarks - be very lenient
+    const leftShoulder = landmarks[LM.LEFT_SHOULDER];
+    const rightShoulder = landmarks[LM.RIGHT_SHOULDER];
+    const leftElbow = landmarks[LM.LEFT_ELBOW];
+    const rightElbow = landmarks[LM.RIGHT_ELBOW];
+    const leftWrist = landmarks[LM.LEFT_WRIST];
+    const rightWrist = landmarks[LM.RIGHT_WRIST];
+    
+    // Calculate elbow angle - use whichever arm is more visible
+    let elbowAngle = 0;
+    let armCount = 0;
+    
+    // Left arm
+    if (leftShoulder && leftElbow && leftWrist) {
+      const leftAngle = calculateAngle(leftShoulder, leftElbow, leftWrist);
+      if (!isNaN(leftAngle)) {
+        elbowAngle += leftAngle;
+        armCount++;
       }
     }
-  }
-  
-  // Side view: clear asymmetry in visibility
-  if (leftVis >= CONSTANTS.VISIBILITY_HIGH && rightVis <= CONSTANTS.VISIBILITY_LOW) {
-    if (zDiff >= CONSTANTS.SIDE_VIEW_Z_DIFF_MIN) {
-      return 'left_side';
+    
+    // Right arm
+    if (rightShoulder && rightElbow && rightWrist) {
+      const rightAngle = calculateAngle(rightShoulder, rightElbow, rightWrist);
+      if (!isNaN(rightAngle)) {
+        elbowAngle += rightAngle;
+        armCount++;
+      }
+    }
+    
+    if (armCount === 0) {
+      return { state: this.state, count: this.count, feedback: 'Show your arms', angle: 0 };
+    }
+    
+    elbowAngle = elbowAngle / armCount; // Average
+    
+    // Simple state machine - just track up/down based on elbow angle
+    const isUp = elbowAngle > CONFIG.UP_ANGLE;
+    const isDown = elbowAngle < CONFIG.DOWN_ANGLE;
+    
+    // State transitions
+    if (this.state === 'up' && isDown) {
+      this.state = 'down';
+      return { state: this.state, count: this.count, feedback: 'Push up!', angle: elbowAngle };
+    }
+    
+    if (this.state === 'down' && isUp) {
+      // Coming back up - count the rep!
+      const timeSinceLastRep = now - this.lastRepTime;
+      
+      if (timeSinceLastRep > CONFIG.MIN_REP_TIME_MS) {
+        this.count++;
+        this.lastRepTime = now;
+        this.state = 'up';
+        return { state: this.state, count: this.count, feedback: `${this.count}!`, angle: elbowAngle };
+      }
+      
+      this.state = 'up';
+    }
+    
+    // Feedback based on current state
+    if (this.state === 'up') {
+      return { state: this.state, count: this.count, feedback: 'Lower down', angle: elbowAngle };
+    } else {
+      return { state: this.state, count: this.count, feedback: 'Extend arms', angle: elbowAngle };
     }
   }
-  if (rightVis >= CONSTANTS.VISIBILITY_HIGH && leftVis <= CONSTANTS.VISIBILITY_LOW) {
-    if (zDiff >= CONSTANTS.SIDE_VIEW_Z_DIFF_MIN) {
-      return 'right_side';
-    }
-  }
-  
-  return 'unknown';
-};
+}
 
-// Get side landmarks
-const getVisibleSideLandmarks = (landmarks: any[], viewMode: ViewMode) => {
-  const isLeft = viewMode === 'left_side';
-  return {
-    shoulder: landmarks[isLeft ? LM.LEFT_SHOULDER : LM.RIGHT_SHOULDER],
-    elbow: landmarks[isLeft ? LM.LEFT_ELBOW : LM.RIGHT_ELBOW],
-    wrist: landmarks[isLeft ? LM.LEFT_WRIST : LM.RIGHT_WRIST],
-    hip: landmarks[isLeft ? LM.LEFT_HIP : LM.RIGHT_HIP],
-    knee: landmarks[isLeft ? LM.LEFT_KNEE : LM.RIGHT_KNEE],
-    ankle: landmarks[isLeft ? LM.LEFT_ANKLE : LM.RIGHT_ANKLE],
-  };
-};
-
-// Check side landmark visibility
-const areSideLandmarksVisible = (landmarks: any[], viewMode: ViewMode): boolean => {
-  const side = getVisibleSideLandmarks(landmarks, viewMode);
-  return (
-    isLandmarkVisible(side.shoulder, CONSTANTS.VISIBILITY_THRESHOLD) &&
-    isLandmarkVisible(side.elbow, CONSTANTS.VISIBILITY_THRESHOLD) &&
-    isLandmarkVisible(side.wrist, CONSTANTS.VISIBILITY_THRESHOLD) &&
-    isLandmarkVisible(side.hip, CONSTANTS.VISIBILITY_THRESHOLD) &&
-    isLandmarkVisible(side.ankle, CONSTANTS.VISIBILITY_THRESHOLD)
-  );
-};
-
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
 export function TrackPage() {
-  const { currentUser } = useAuth();
   const [count, setCount] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isTracking, setIsTracking] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(false);
-  const [state, setState] = useState<PushUpState>('get_ready');
   const [feedback, setFeedback] = useState('Enable camera to start');
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [poseDetected, setPoseDetected] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>('unknown');
-  const [viewLocked, setViewLocked] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isSessionSaved, setIsSessionSaved] = useState(false);
+  const [modelLoading, setModelLoading] = useState(true);
   const [sessionEnded, setSessionEnded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [formQuality, setFormQuality] = useState<'good' | 'warning' | 'poor'>('good');
-
+  const [currentAngle, setCurrentAngle] = useState(0);
+  
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animationRef = useRef<number | undefined>(undefined);
-  const manualFrameRef = useRef<number | undefined>(undefined);
-  
-  const stateRef = useRef<PushUpState>('get_ready');
-  const countRef = useRef(0);
-  const trackingRef = useRef(false);
-  const pausedRef = useRef(false);
-  const lastStateChangeRef = useRef(0);
-  const visibilityGracePeriodRef = useRef(0);
-  
-  // View detection refs
-  const viewModeRef = useRef<ViewMode>('unknown');
-  const viewLockedRef = useRef(false);
-  const lastRepTimeRef = useRef(0);
-  const baselineShoulderYRef = useRef<number | null>(null);
-  const viewConfidenceRef = useRef(0);
-
+  const detectorRef = useRef(new PushUpDetector());
   const poseRef = useRef<any>(null);
-  const lastPoseResultsRef = useRef<any>(null);
-  const cameraInstanceRef = useRef<any>(null);
+  const lastResultRef = useRef<any>(null);
   const isMountedRef = useRef(true);
+  const isTrackingRef = useRef(false);
+  const isPausedRef = useRef(false);
   
-  // UI buffer
-  const uiBufferRef = useRef({
-    count: 0,
-    state: 'get_ready' as PushUpState,
-    feedback: 'Enable camera to start',
-    poseDetected: false,
-    viewMode: 'unknown' as ViewMode,
-    viewLocked: false,
-    formQuality: 'good' as 'good' | 'warning' | 'poor',
-    needsSync: false,
-  });
-  const uiSyncIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
+  // Keep refs in sync with state
   useEffect(() => {
-    trackingRef.current = isTracking;
+    isTrackingRef.current = isTracking;
   }, [isTracking]);
-
+  
   useEffect(() => {
-    pausedRef.current = isPaused;
+    isPausedRef.current = isPaused;
   }, [isPaused]);
-
+  
   // Timer
   useEffect(() => {
     if (!isTracking || isPaused) return;
-    const interval = setInterval(() => {
-      setDuration(d => d + 1);
-    }, 1000);
-    return () => clearInterval(interval);
+    const timer = setInterval(() => setDuration(d => d + 1), 1000);
+    return () => clearInterval(timer);
   }, [isTracking, isPaused]);
-
+  
   // UI sync
   useEffect(() => {
-    const syncInterval = 1000 / CONSTANTS.UI_SYNC_FPS;
-    
-    uiSyncIntervalRef.current = setInterval(() => {
-      if (!isMountedRef.current) return;
-      
-      const buffer = uiBufferRef.current;
-      if (!buffer.needsSync) return;
-      
-      setCount(buffer.count);
-      setState(buffer.state);
-      setFeedback(buffer.feedback);
-      setPoseDetected(buffer.poseDetected);
-      setViewMode(buffer.viewMode);
-      setViewLocked(buffer.viewLocked);
-      setFormQuality(buffer.formQuality);
-      buffer.needsSync = false;
-    }, syncInterval);
-    
-    return () => {
-      if (uiSyncIntervalRef.current) {
-        clearInterval(uiSyncIntervalRef.current);
-        uiSyncIntervalRef.current = null;
+    if (!isTracking || isPaused) return;
+    const sync = setInterval(() => {
+      if (detectorRef.current) {
+        setCount(detectorRef.current.count);
       }
-    };
-  }, []);
-
-  // Initialize MediaPipe
+    }, 1000 / CONFIG.UI_FPS);
+    return () => clearInterval(sync);
+  }, [isTracking, isPaused]);
+  
+  // Load MediaPipe
   useEffect(() => {
-    const loadPose = async () => {
+    const load = async () => {
       try {
+        setModelLoading(true);
         const { Pose } = await import('@mediapipe/pose');
-        const { Camera } = await import('@mediapipe/camera_utils');
         
         const pose = new Pose({
-          locateFile: (file: string) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`;
-          },
+          locateFile: (file: string) => 
+            `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`,
         });
-
+        
         pose.setOptions({
           modelComplexity: 1,
           smoothLandmarks: true,
-          enableSegmentation: false,
-          smoothSegmentation: false,
           minDetectionConfidence: 0.5,
           minTrackingConfidence: 0.5,
         });
-
-        pose.onResults(onPoseResults);
-        poseRef.current = { pose, Camera };
-        console.log('MediaPipe Pose loaded successfully');
-      } catch (error) {
-        console.error('Failed to initialize MediaPipe Pose:', error);
-        if (isMountedRef.current) {
-          setError('Pose detection unavailable - using video only mode');
-        }
-        poseRef.current = null;
+        
+        pose.onResults(onResults);
+        poseRef.current = pose;
+        setModelLoading(false);
+      } catch (err) {
+        console.error('MediaPipe load failed:', err);
+        setModelLoading(false);
       }
     };
-
-    loadPose();
-    return () => {};
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Camera management
+    load();
+  }, []);
+  
+  // Camera control
   useEffect(() => {
-    if (cameraEnabled) {
+    if (cameraEnabled && !modelLoading) {
       startCamera();
     } else {
       stopCamera();
     }
-    return () => {
-      stopCamera();
-    };
-  }, [cameraEnabled, facingMode]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Component unmount cleanup
+    return stopCamera;
+  }, [cameraEnabled, facingMode, modelLoading]);
+  
+  // Cleanup
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
       stopCamera();
-      if (poseRef.current?.pose) {
-        try {
-          poseRef.current.pose.close();
-        } catch (error) {
-          console.error('Error closing MediaPipe Pose on unmount:', error);
-        }
+      if (poseRef.current) {
+        try { poseRef.current.close(); } catch {}
         poseRef.current = null;
       }
     };
   }, []);
-
-  // Unified render loop
-  const startRenderLoop = () => {
-    if (animationRef.current !== undefined) {
-      cancelAnimationFrame(animationRef.current);
-      animationRef.current = undefined;
-    }
+  
+  const onResults = (results: any) => {
+    if (!isMountedRef.current || isPausedRef.current) return;
+    lastResultRef.current = results;
     
+    if (results.poseLandmarks) {
+      setPoseDetected(true);
+      
+      // Always run detection to show angle, regardless of tracking state
+      const result = detectorRef.current.detect(results.poseLandmarks);
+      setCurrentAngle(result.angle);
+      
+      if (isTrackingRef.current) {
+        setFeedback(result.feedback);
+      }
+    } else {
+      setPoseDetected(false);
+      setCurrentAngle(0);
+    }
+  };
+  
+  const startRenderLoop = () => {
     const render = () => {
-      if (!isMountedRef.current || !canvasRef.current || !videoRef.current || !streamRef.current) {
-        animationRef.current = undefined;
+      if (!isMountedRef.current || !canvasRef.current || !videoRef.current) {
         return;
       }
       
@@ -351,12 +288,12 @@ export function TrackPage() {
       const video = videoRef.current;
       const ctx = canvas.getContext('2d');
       
-      if (!ctx || video.readyState < 2 || video.videoWidth === 0) {
+      if (!ctx || video.readyState < 2) {
         animationRef.current = requestAnimationFrame(render);
         return;
       }
-
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+      
+      if (canvas.width !== video.videoWidth) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
       }
@@ -366,872 +303,305 @@ export function TrackPage() {
         ctx.scale(-1, 1);
         ctx.translate(-canvas.width, 0);
       }
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(video, 0, 0);
       ctx.restore();
       
-      if (lastPoseResultsRef.current?.poseLandmarks) {
-        drawPose(ctx, lastPoseResultsRef.current.poseLandmarks);
+      // Draw skeleton
+      if (lastResultRef.current?.poseLandmarks) {
+        drawSkeleton(ctx, lastResultRef.current.poseLandmarks);
       }
       
       if (isMountedRef.current && streamRef.current) {
         animationRef.current = requestAnimationFrame(render);
-      } else {
-        animationRef.current = undefined;
       }
     };
-    
     render();
   };
-
-  const startCamera = async () => {
-    try {
-      setError(null);
-      const constraints = getCameraConstraints(facingMode);
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        
-        await new Promise<void>((resolve) => {
-          const checkReady = () => {
-            if (videoRef.current && videoRef.current.readyState >= 2 && videoRef.current.videoWidth > 0) {
-              resolve();
-            } else {
-              setTimeout(checkReady, 100);
-            }
-          };
-          checkReady();
-        });
-        
-        startRenderLoop();
-        
-        if (poseRef.current?.Camera && poseRef.current?.pose) {
-          console.log('Using MediaPipe Camera utils');
-          const camera = new poseRef.current.Camera(videoRef.current, {
-            onFrame: async () => {
-              if (videoRef.current && poseRef.current?.pose) {
-                await poseRef.current.pose.send({ image: videoRef.current });
-              }
-            },
-            width: 1280,
-            height: 720,
-          });
-          cameraInstanceRef.current = camera;
-          camera.start();
-        } else if (poseRef.current?.pose) {
-          console.log('Using manual frame sending');
-          let lastFrameTime = 0;
-          const frameInterval = 1000 / getPoseFPS();
-          
-          if (manualFrameRef.current !== undefined) {
-            cancelAnimationFrame(manualFrameRef.current);
-            manualFrameRef.current = undefined;
-          }
-          
-          const sendFrame = async () => {
-            if (!isMountedRef.current || !streamRef.current || !videoRef.current || !poseRef.current?.pose) {
-              manualFrameRef.current = undefined;
-              return;
-            }
-            
-            const now = Date.now();
-            if (videoRef.current.readyState >= 2) {
-              if (now - lastFrameTime >= frameInterval) {
-                lastFrameTime = now;
-                try {
-                  await poseRef.current.pose.send({ image: videoRef.current });
-                } catch (error) {
-                  console.error('Error sending frame:', error);
-                }
-              }
-            }
-            
-            if (isMountedRef.current && streamRef.current) {
-              manualFrameRef.current = requestAnimationFrame(sendFrame);
-            } else {
-              manualFrameRef.current = undefined;
-            }
-          };
-          manualFrameRef.current = requestAnimationFrame(sendFrame);
-        } else {
-          console.log('MediaPipe not available');
-        }
-      }
-    } catch (error) {
-      console.error('Camera error:', error);
-      setError('Camera access denied. Please allow camera permissions.');
-      setFeedback('Camera access denied');
-    }
-  };
-
-  const stopCamera = () => {
-    if (animationRef.current !== undefined) {
-      cancelAnimationFrame(animationRef.current);
-      animationRef.current = undefined;
-    }
-    
-    if (manualFrameRef.current !== undefined) {
-      cancelAnimationFrame(manualFrameRef.current);
-      manualFrameRef.current = undefined;
-    }
-    
-    if (cameraInstanceRef.current) {
-      try {
-        cameraInstanceRef.current.stop();
-      } catch (e) {
-        console.error('Error stopping camera:', e);
-      }
-      cameraInstanceRef.current = null;
-    }
-    
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-      videoRef.current.pause();
-    }
-    
-    lastPoseResultsRef.current = null;
-  };
-
-  const onPoseResults = (results: any) => {
-    if (!isMountedRef.current) return;
-    
-    lastPoseResultsRef.current = results;
-    
-    if (results.poseLandmarks) {
-      if (uiBufferRef.current.poseDetected !== true) {
-        uiBufferRef.current.poseDetected = true;
-        uiBufferRef.current.needsSync = true;
-      }
-      visibilityGracePeriodRef.current = 0;
-      
-      if (!trackingRef.current) {
-        const detectedView = detectViewMode(results.poseLandmarks);
-        if (detectedView !== 'unknown' && uiBufferRef.current.viewMode !== detectedView) {
-          uiBufferRef.current.viewMode = detectedView;
-          uiBufferRef.current.needsSync = true;
-        }
-      }
-      
-      if (trackingRef.current && !pausedRef.current) {
-        detectPushUp(results.poseLandmarks);
-      }
-    } else {
-      if (uiBufferRef.current.poseDetected !== false) {
-        uiBufferRef.current.poseDetected = false;
-        uiBufferRef.current.needsSync = true;
-      }
-      if (trackingRef.current && uiBufferRef.current.feedback !== 'Position yourself in frame') {
-        uiBufferRef.current.feedback = 'Position yourself in frame';
-        uiBufferRef.current.needsSync = true;
-      }
-    }
-  };
-
-  const drawPose = (ctx: CanvasRenderingContext2D, landmarks: any[]) => {
+  
+  const drawSkeleton = (ctx: CanvasRenderingContext2D, landmarks: any[]) => {
     const connections = [
-      [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER],
+      // Arms (important for push-ups)
       [LM.LEFT_SHOULDER, LM.LEFT_ELBOW],
       [LM.LEFT_ELBOW, LM.LEFT_WRIST],
       [LM.RIGHT_SHOULDER, LM.RIGHT_ELBOW],
       [LM.RIGHT_ELBOW, LM.RIGHT_WRIST],
+      // Torso
+      [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER],
       [LM.LEFT_SHOULDER, LM.LEFT_HIP],
       [LM.RIGHT_SHOULDER, LM.RIGHT_HIP],
       [LM.LEFT_HIP, LM.RIGHT_HIP],
+      // Legs
       [LM.LEFT_HIP, LM.LEFT_KNEE],
       [LM.LEFT_KNEE, LM.LEFT_ANKLE],
       [LM.RIGHT_HIP, LM.RIGHT_KNEE],
       [LM.RIGHT_KNEE, LM.RIGHT_ANKLE],
     ];
-
+    
     ctx.save();
     if (facingMode === 'user') {
       ctx.scale(-1, 1);
       ctx.translate(-ctx.canvas.width, 0);
     }
-
-    // Draw connections with gradient
-    connections.forEach(([start, end]) => {
-      const startLm = landmarks[start];
-      const endLm = landmarks[end];
-      if (isLandmarkVisible(startLm, 0.3) && isLandmarkVisible(endLm, 0.3)) {
-        const gradient = ctx.createLinearGradient(
-          startLm.x * ctx.canvas.width, 
-          startLm.y * ctx.canvas.height,
-          endLm.x * ctx.canvas.width, 
-          endLm.y * ctx.canvas.height
-        );
-        gradient.addColorStop(0, '#00ff88');
-        gradient.addColorStop(1, '#00ccff');
-        
-        ctx.strokeStyle = gradient;
-        ctx.lineWidth = 4;
-        ctx.lineCap = 'round';
-        ctx.shadowColor = 'rgba(0, 255, 136, 0.5)';
-        ctx.shadowBlur = 10;
+    
+    // Draw lines
+    ctx.strokeStyle = 'rgba(0, 255, 100, 0.8)';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    
+    connections.forEach(([a, b]) => {
+      const lmA = landmarks[a];
+      const lmB = landmarks[b];
+      if (isVisible(lmA) && isVisible(lmB)) {
         ctx.beginPath();
-        ctx.moveTo(startLm.x * ctx.canvas.width, startLm.y * ctx.canvas.height);
-        ctx.lineTo(endLm.x * ctx.canvas.width, endLm.y * ctx.canvas.height);
+        ctx.moveTo(lmA.x * ctx.canvas.width, lmA.y * ctx.canvas.height);
+        ctx.lineTo(lmB.x * ctx.canvas.width, lmB.y * ctx.canvas.height);
         ctx.stroke();
-        ctx.shadowBlur = 0;
       }
     });
-
-    // Draw landmarks
-    landmarks.forEach((landmark, idx) => {
-      if (isLandmarkVisible(landmark, 0.3)) {
-        const isKeyPoint = [
-          LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER,
-          LM.LEFT_ELBOW, LM.RIGHT_ELBOW,
-          LM.LEFT_WRIST, LM.RIGHT_WRIST,
-          LM.LEFT_HIP, LM.RIGHT_HIP
-        ].includes(idx);
-        
-        ctx.fillStyle = isKeyPoint ? '#ff3366' : '#ffdd00';
-        ctx.shadowColor = isKeyPoint ? 'rgba(255, 51, 102, 0.8)' : 'rgba(255, 221, 0, 0.8)';
-        ctx.shadowBlur = 15;
+    
+    // Highlight elbows (key joints for push-ups)
+    const elbows = [LM.LEFT_ELBOW, LM.RIGHT_ELBOW];
+    ctx.fillStyle = 'rgba(255, 50, 50, 0.9)';
+    elbows.forEach(idx => {
+      const lm = landmarks[idx];
+      if (isVisible(lm)) {
         ctx.beginPath();
-        ctx.arc(
-          landmark.x * ctx.canvas.width,
-          landmark.y * ctx.canvas.height,
-          isKeyPoint ? 6 : 4,
-          0,
-          2 * Math.PI
-        );
+        ctx.arc(lm.x * ctx.canvas.width, lm.y * ctx.canvas.height, 8, 0, 2 * Math.PI);
         ctx.fill();
-        ctx.shadowBlur = 0;
       }
     });
-
+    
+    // Other key joints
+    const keyPoints = [
+      LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER,
+      LM.LEFT_WRIST, LM.RIGHT_WRIST,
+      LM.LEFT_HIP, LM.RIGHT_HIP,
+    ];
+    
+    ctx.fillStyle = 'rgba(255, 255, 0, 0.9)';
+    keyPoints.forEach(idx => {
+      const lm = landmarks[idx];
+      if (isVisible(lm)) {
+        ctx.beginPath();
+        ctx.arc(lm.x * ctx.canvas.width, lm.y * ctx.canvas.height, 6, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    });
+    
     ctx.restore();
   };
-
-  const detectPushUp = (landmarks: any[]) => {
-    const now = Date.now();
-    
-    // View detection with confidence building
-    if (!viewLockedRef.current) {
-      const detectedView = detectViewMode(landmarks);
-      if (detectedView !== 'unknown') {
-        if (viewModeRef.current === detectedView) {
-          viewConfidenceRef.current++;
-        } else {
-          viewModeRef.current = detectedView;
-          viewConfidenceRef.current = 1;
-        }
+  
+  const startCamera = async () => {
+    try {
+      const constraints = getCameraConstraints(facingMode);
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
         
-        if (viewConfidenceRef.current >= 3 || stateRef.current === 'get_ready') {
-          uiBufferRef.current.viewMode = detectedView;
-          uiBufferRef.current.needsSync = true;
-        }
+        await new Promise<void>(resolve => {
+          const check = () => {
+            if (videoRef.current && videoRef.current.readyState >= 2) resolve();
+            else setTimeout(check, 100);
+          };
+          check();
+        });
+        
+        startRenderLoop();
+        
+        // Send frames to pose detector
+        const sendFrame = async () => {
+          if (!isMountedRef.current || !streamRef.current || !poseRef.current) return;
+          if (videoRef.current && videoRef.current.readyState >= 2) {
+            await poseRef.current.send({ image: videoRef.current });
+          }
+          setTimeout(sendFrame, 1000 / CONFIG.POSE_FPS);
+        };
+        sendFrame();
       }
-    }
-    
-    const currentView = viewModeRef.current;
-    
-    // Check visibility
-    let landmarksVisible = false;
-    
-    if (currentView === 'front' || currentView === 'unknown') {
-      const requiredPoints = [
-        LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER,
-        LM.LEFT_ELBOW, LM.RIGHT_ELBOW,
-        LM.LEFT_WRIST, LM.RIGHT_WRIST,
-        LM.LEFT_HIP, LM.RIGHT_HIP,
-        LM.LEFT_ANKLE, LM.RIGHT_ANKLE,
-      ];
-      landmarksVisible = requiredPoints.every(idx => 
-        isLandmarkVisible(landmarks[idx], CONSTANTS.VISIBILITY_THRESHOLD)
-      );
-    } else {
-      landmarksVisible = areSideLandmarksVisible(landmarks, currentView);
-    }
-    
-    if (!landmarksVisible) {
-      if (visibilityGracePeriodRef.current === 0) {
-        visibilityGracePeriodRef.current = now;
-      } else if (now - visibilityGracePeriodRef.current > CONSTANTS.GRACE_PERIOD_MS) {
-        if (stateRef.current !== 'get_ready') {
-          stateRef.current = 'get_ready';
-          uiBufferRef.current.state = 'get_ready';
-        }
-        const feedback = currentView === 'front' || currentView === 'unknown'
-          ? 'Move back - full body must be visible'
-          : 'Stay in side view - adjust position';
-        if (uiBufferRef.current.feedback !== feedback) {
-          uiBufferRef.current.feedback = feedback;
-          uiBufferRef.current.needsSync = true;
-        }
-      } else {
-        if (uiBufferRef.current.feedback !== 'Stay in frame...') {
-          uiBufferRef.current.feedback = 'Stay in frame...';
-          uiBufferRef.current.needsSync = true;
-        }
-      }
-      return;
-    }
-    
-    visibilityGracePeriodRef.current = 0;
-    
-    // Route to detection
-    if (currentView === 'left_side' || currentView === 'right_side') {
-      detectPushUpSideView(landmarks, currentView);
-    } else {
-      detectPushUpFrontView(landmarks);
+    } catch (err) {
+      console.error('Camera error:', err);
+      setFeedback('Camera access denied');
     }
   };
   
-  // Front-view detection - enhanced
-  const detectPushUpFrontView = (landmarks: any[]) => {
-    const leftElbowAngle = calculateAngle(
-      landmarks[LM.LEFT_SHOULDER],
-      landmarks[LM.LEFT_ELBOW],
-      landmarks[LM.LEFT_WRIST]
-    );
-
-    const rightElbowAngle = calculateAngle(
-      landmarks[LM.RIGHT_SHOULDER],
-      landmarks[LM.RIGHT_ELBOW],
-      landmarks[LM.RIGHT_WRIST]
-    );
-
-    const avgElbowAngle = (leftElbowAngle + rightElbowAngle) / 2;
-
-    const leftBackAngle = calculateAngle(
-      landmarks[LM.LEFT_SHOULDER],
-      landmarks[LM.LEFT_HIP],
-      landmarks[LM.LEFT_ANKLE]
-    );
-
-    const rightBackAngle = calculateAngle(
-      landmarks[LM.RIGHT_SHOULDER],
-      landmarks[LM.RIGHT_HIP],
-      landmarks[LM.RIGHT_ANKLE]
-    );
-
-    const avgBackAngle = (leftBackAngle + rightBackAngle) / 2;
-
-    // Enhanced elbow flare detection
-    const leftShoulderToElbow = {
-      x: landmarks[LM.LEFT_ELBOW].x - landmarks[LM.LEFT_SHOULDER].x,
-      y: landmarks[LM.LEFT_ELBOW].y - landmarks[LM.LEFT_SHOULDER].y
-    };
-    const rightShoulderToElbow = {
-      x: landmarks[LM.RIGHT_ELBOW].x - landmarks[LM.RIGHT_SHOULDER].x,
-      y: landmarks[LM.RIGHT_ELBOW].y - landmarks[LM.RIGHT_SHOULDER].y
-    };
-    const shoulderLine = {
-      x: landmarks[LM.RIGHT_SHOULDER].x - landmarks[LM.LEFT_SHOULDER].x,
-      y: landmarks[LM.RIGHT_SHOULDER].y - landmarks[LM.LEFT_SHOULDER].y
-    };
-    
-    const leftElbowFlare = Math.abs(
-      Math.atan2(leftShoulderToElbow.y, leftShoulderToElbow.x) - 
-      Math.atan2(shoulderLine.y, shoulderLine.x)
-    ) * 180 / Math.PI;
-    
-    const rightElbowFlare = Math.abs(
-      Math.atan2(rightShoulderToElbow.y, rightShoulderToElbow.x) - 
-      Math.atan2(-shoulderLine.y, -shoulderLine.x)
-    ) * 180 / Math.PI;
-    
-    const maxElbowFlare = Math.max(leftElbowFlare, rightElbowFlare);
-
-    // Form feedback and quality
-    let formFeedback = 'Perfect form!';
-    let quality: 'good' | 'warning' | 'poor' = 'good';
-    
-    if (avgBackAngle < CONSTANTS.BACK_ALIGNMENT_MIN) {
-      formFeedback = 'Keep your back straight - don\'t sag';
-      quality = 'poor';
-    } else if (maxElbowFlare > CONSTANTS.ELBOW_FLARE_THRESHOLD && avgElbowAngle < 120) {
-      formFeedback = 'Tuck elbows closer to body';
-      quality = 'warning';
-    } else if (avgElbowAngle < 120 && avgElbowAngle > 90) {
-      formFeedback = 'Good depth - keep going!';
-      quality = 'good';
+  const stopCamera = () => {
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
     }
-    
-    if (uiBufferRef.current.formQuality !== quality) {
-      uiBufferRef.current.formQuality = quality;
-      uiBufferRef.current.needsSync = true;
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
     }
-
-    const now = Date.now();
-
-    if (stateRef.current === 'get_ready') {
-      if (avgBackAngle > CONSTANTS.PLANK_BACK_ANGLE && avgElbowAngle > CONSTANTS.PLANK_ELBOW_ANGLE) {
-        if (now - lastStateChangeRef.current > CONSTANTS.MIN_STATE_CHANGE_MS) {
-          stateRef.current = 'plank';
-          viewLockedRef.current = true;
-          uiBufferRef.current.state = 'plank';
-          uiBufferRef.current.viewLocked = true;
-          uiBufferRef.current.feedback = '🔒 Front view locked - Start your set!';
-          uiBufferRef.current.needsSync = true;
-          lastStateChangeRef.current = now;
-        }
-      } else {
-        const newFeedback = 'Get into plank: straight body, arms extended';
-        if (uiBufferRef.current.feedback !== newFeedback) {
-          uiBufferRef.current.feedback = newFeedback;
-          uiBufferRef.current.needsSync = true;
-        }
-      }
-    } else if (stateRef.current === 'plank' || stateRef.current === 'up') {
-      if (avgElbowAngle < CONSTANTS.DOWN_ELBOW_ANGLE) {
-        if (now - lastStateChangeRef.current > CONSTANTS.MIN_STATE_CHANGE_MS) {
-          stateRef.current = 'down';
-          uiBufferRef.current.state = 'down';
-          uiBufferRef.current.feedback = 'Push up now! 💪';
-          uiBufferRef.current.needsSync = true;
-          lastStateChangeRef.current = now;
-        }
-      } else {
-        if (uiBufferRef.current.feedback !== formFeedback) {
-          uiBufferRef.current.feedback = formFeedback;
-          uiBufferRef.current.needsSync = true;
-        }
-      }
-    } else if (stateRef.current === 'down') {
-      if (avgElbowAngle > CONSTANTS.UP_ELBOW_ANGLE) {
-        const timeSinceDown = now - lastStateChangeRef.current;
-        const timeSinceLastRep = now - lastRepTimeRef.current;
-        
-        if (timeSinceDown > CONSTANTS.MIN_STATE_CHANGE_MS && 
-            timeSinceLastRep > CONSTANTS.MIN_REP_DURATION_MS) {
-          countRef.current++;
-          stateRef.current = 'up';
-          const newFeedback = `🎯 Rep ${countRef.current}! ${formFeedback}`;
-          uiBufferRef.current.count = countRef.current;
-          uiBufferRef.current.state = 'up';
-          uiBufferRef.current.feedback = newFeedback;
-          uiBufferRef.current.needsSync = true;
-          lastStateChangeRef.current = now;
-          lastRepTimeRef.current = now;
-        }
-      } else {
-        if (uiBufferRef.current.feedback !== 'Push up - extend arms fully!') {
-          uiBufferRef.current.feedback = 'Push up - extend arms fully!';
-          uiBufferRef.current.needsSync = true;
-        }
-      }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
     }
   };
   
-  // Side-view detection - enhanced
-  const detectPushUpSideView = (landmarks: any[], viewMode: ViewMode) => {
-    const side = getVisibleSideLandmarks(landmarks, viewMode);
-    const now = Date.now();
-    const viewLabel = viewMode === 'left_side' ? 'Left' : 'Right';
-    
-    const elbowAngle = calculateAngle(side.shoulder, side.elbow, side.wrist);
-    const bodyAngle = calculateAngle(side.shoulder, side.hip, side.ankle);
-    
-    const shoulderY = side.shoulder.y;
-    const hipY = side.hip.y;
-    
-    if (baselineShoulderYRef.current === null && stateRef.current === 'get_ready') {
-      baselineShoulderYRef.current = shoulderY;
-    }
-    
-    const baseline = baselineShoulderYRef.current ?? shoulderY;
-    const shoulderDrop = shoulderY - baseline;
-    
-    // Form feedback
-    let formFeedback = 'Perfect form!';
-    let quality: 'good' | 'warning' | 'poor' = 'good';
-    
-    if (bodyAngle < CONSTANTS.BACK_ALIGNMENT_MIN) {
-      formFeedback = 'Keep body straight - don\'t sag hips';
-      quality = 'poor';
-    } else if (elbowAngle < 100 && elbowAngle > 80) {
-      formFeedback = 'Great depth! 💪';
-      quality = 'good';
-    }
-    
-    if (uiBufferRef.current.formQuality !== quality) {
-      uiBufferRef.current.formQuality = quality;
-      uiBufferRef.current.needsSync = true;
-    }
-
-    if (stateRef.current === 'get_ready') {
-      const isElbowExtended = elbowAngle > CONSTANTS.SIDE_PLANK_ELBOW_ANGLE;
-      const isStable = Math.abs(shoulderDrop) < CONSTANTS.SHOULDER_STABLE_TOLERANCE;
-      const bodyIsAligned = bodyAngle > CONSTANTS.BACK_ALIGNMENT_MIN;
-      
-      if (isElbowExtended && isStable && bodyIsAligned) {
-        if (now - lastStateChangeRef.current > CONSTANTS.MIN_STATE_CHANGE_MS) {
-          stateRef.current = 'plank';
-          viewLockedRef.current = true;
-          baselineShoulderYRef.current = shoulderY;
-          uiBufferRef.current.state = 'plank';
-          uiBufferRef.current.viewLocked = true;
-          uiBufferRef.current.feedback = `🔒 ${viewLabel} side locked - Start your set!`;
-          uiBufferRef.current.needsSync = true;
-          lastStateChangeRef.current = now;
-        }
-      } else {
-        const newFeedback = `${viewLabel} side - plank position ready`;
-        if (uiBufferRef.current.feedback !== newFeedback) {
-          uiBufferRef.current.feedback = newFeedback;
-          uiBufferRef.current.needsSync = true;
-        }
-      }
-    } else if (stateRef.current === 'plank' || stateRef.current === 'up') {
-      const isElbowBent = elbowAngle < CONSTANTS.SIDE_DOWN_ELBOW_ANGLE;
-      const hasShoulderDropped = shoulderDrop > CONSTANTS.SHOULDER_DROP_RATIO;
-      
-      if (isElbowBent || hasShoulderDropped) {
-        if (now - lastStateChangeRef.current > CONSTANTS.MIN_STATE_CHANGE_MS) {
-          stateRef.current = 'down';
-          uiBufferRef.current.state = 'down';
-          uiBufferRef.current.feedback = 'Push up now! 💪';
-          uiBufferRef.current.needsSync = true;
-          lastStateChangeRef.current = now;
-        }
-      } else {
-        if (uiBufferRef.current.feedback !== formFeedback) {
-          uiBufferRef.current.feedback = formFeedback;
-          uiBufferRef.current.needsSync = true;
-        }
-      }
-    } else if (stateRef.current === 'down') {
-      const isElbowExtended = elbowAngle > CONSTANTS.SIDE_UP_ELBOW_ANGLE;
-      const hasShoulderRisen = shoulderDrop < CONSTANTS.SHOULDER_STABLE_TOLERANCE;
-      
-      if (isElbowExtended && hasShoulderRisen) {
-        const timeSinceDown = now - lastStateChangeRef.current;
-        const timeSinceLastRep = now - lastRepTimeRef.current;
-        
-        if (timeSinceDown > CONSTANTS.MIN_STATE_CHANGE_MS && 
-            timeSinceLastRep > CONSTANTS.MIN_REP_DURATION_MS) {
-          countRef.current++;
-          stateRef.current = 'up';
-          const newFeedback = `🎯 Rep ${countRef.current}! ${formFeedback}`;
-          uiBufferRef.current.count = countRef.current;
-          uiBufferRef.current.state = 'up';
-          uiBufferRef.current.feedback = newFeedback;
-          uiBufferRef.current.needsSync = true;
-          lastStateChangeRef.current = now;
-          lastRepTimeRef.current = now;
-        }
-      } else {
-        if (uiBufferRef.current.feedback !== 'Push up - extend fully!') {
-          uiBufferRef.current.feedback = 'Push up - extend fully!';
-          uiBufferRef.current.needsSync = true;
-        }
-      }
-    }
-  };
-
   const startTracking = () => {
-    setIsTracking(true);
-    setIsPaused(false);
-    setIsSessionSaved(false);
-    setSessionEnded(false);
-    countRef.current = 0;
+    detectorRef.current.reset();
     setCount(0);
     setDuration(0);
-    stateRef.current = 'get_ready';
-    setState('get_ready');
-    setFeedback('Get into position...');
-    setFormQuality('good');
-    
-    viewModeRef.current = 'unknown';
-    viewLockedRef.current = false;
-    viewConfidenceRef.current = 0;
-    lastRepTimeRef.current = 0;
-    baselineShoulderYRef.current = null;
-    
-    uiBufferRef.current = {
-      count: 0,
-      state: 'get_ready',
-      feedback: 'Get into position...',
-      poseDetected: uiBufferRef.current.poseDetected,
-      viewMode: 'unknown',
-      viewLocked: false,
-      formQuality: 'good',
-      needsSync: true,
-    };
+    setIsTracking(true);
+    setIsPaused(false);
+    setSessionEnded(false);
+    setFeedback('Start doing push-ups!');
   };
-
-  const togglePause = () => {
-    setIsPaused(p => !p);
-    if (!isPaused) {
-      setFeedback('⏸️ Paused');
-    } else {
-      setFeedback('▶️ Resumed - continue!');
-    }
-  };
-
-  const saveSessionWithRetry = async (data: any, retries = CONSTANTS.SAVE_RETRY_ATTEMPTS): Promise<boolean> => {
-    for (let i = 0; i < retries; i++) {
-      try {
-        await addSession(data);
-        return true;
-      } catch (error) {
-        console.error(`Save attempt ${i + 1} failed:`, error);
-        if (i === retries - 1) throw error;
-        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-      }
-    }
-    return false;
-  };
-
+  
   const endTracking = () => {
     setIsTracking(false);
     setIsPaused(false);
     setSessionEnded(true);
-    stateRef.current = 'get_ready';
-    setState('get_ready');
-    
-    if (count === 0) {
-      setFeedback('Session ended - no reps completed');
-    } else if (!currentUser) {
-      setFeedback(`🎉 ${count} push-ups in ${formatTime(duration)}! Login to save.`);
-    } else {
-      setFeedback(`🎉 ${count} push-ups in ${formatTime(duration)}! Click Save.`);
-    }
+    setFeedback(count > 0 ? `Session complete: ${count} reps` : 'No reps completed');
   };
-
-  const saveSession = async () => {
-    if (!currentUser) {
-      setFeedback('Please login to save your session');
-      return;
-    }
-
-    if (count === 0) {
-      setFeedback('Cannot save session with 0 push-ups');
-      return;
-    }
-
-    if (isSessionSaved) {
-      setFeedback('Session already saved!');
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      const today = new Date();
-      const dateString = today.toISOString().split('T')[0];
-      
-      await saveSessionWithRetry({
-        userId: currentUser.uid,
-        date: dateString,
-        pushUps: count,
-        duration: duration,
-        sets: 1,
-      });
-      
-      setIsSessionSaved(true);
-      setFeedback(`✅ Saved! ${count} push-ups in ${formatTime(duration)}`);
-    } catch (error) {
-      console.error('Failed to save:', error);
-      setFeedback('Failed to save. Please try again.');
-    } finally {
-      setIsSaving(false);
-    }
+  
+  const formatTime = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
   };
-
-  const toggleCamera = () => {
-    setFacingMode(mode => mode === 'user' ? 'environment' : 'user');
-  };
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
+  
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
-      <video ref={videoRef} className="hidden" playsInline muted />
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover" />
-
+    <div className="fixed inset-0 bg-black flex flex-col">
       {!cameraEnabled && (
-        <div className="z-20 flex flex-col items-center gap-6 p-6">
-          <div className="text-center">
-            <Activity className="w-16 h-16 text-emerald-400 mx-auto mb-4 animate-pulse" />
-            <h2 className="text-2xl font-bold text-white mb-2">AI Push-up Tracker</h2>
-            <p className="text-gray-400 text-sm">Track your reps with pose detection</p>
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="text-center space-y-6 max-w-sm">
+            <h1 className="text-4xl font-light text-white">Push-Up Counter</h1>
+            <p className="text-zinc-400">Elbow angle-based rep detection</p>
+            
+            <button
+              onClick={() => setCameraEnabled(true)}
+              disabled={modelLoading}
+              className="w-full bg-white hover:bg-zinc-100 disabled:bg-zinc-700 text-black disabled:text-zinc-500 py-4 rounded-xl font-semibold flex items-center justify-center gap-2"
+            >
+              {modelLoading ? (
+                <>
+                  <Loader2 size={20} className="animate-spin" />
+                  Loading AI model...
+                </>
+              ) : (
+                <>
+                  <Camera size={20} />
+                  Enable Camera
+                </>
+              )}
+            </button>
           </div>
-          <button
-            onClick={() => setCameraEnabled(true)}
-            className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white px-10 py-5 rounded-2xl font-bold text-lg shadow-2xl transition-all transform hover:scale-105 flex items-center gap-3"
-          >
-            <Camera size={28} />
-            Enable Camera
-          </button>
-          <p className="text-gray-500 text-sm max-w-xs text-center">
-            Camera access required for AI-powered tracking
-          </p>
         </div>
       )}
-
+      
       {cameraEnabled && (
         <>
-          {/* Top feedback bar */}
-          <div className="absolute top-0 left-0 right-0 z-10 p-4 lg:p-6">
-            <div className={`backdrop-blur-xl rounded-2xl p-4 lg:p-5 shadow-2xl border-2 transition-colors ${
-              formQuality === 'good' ? 'bg-emerald-900/40 border-emerald-500/50' :
-              formQuality === 'warning' ? 'bg-yellow-900/40 border-yellow-500/50' :
-              'bg-red-900/40 border-red-500/50'
-            }`}>
-              <div className="text-white text-base lg:text-lg font-semibold text-center">
-                {feedback}
-              </div>
+          <video ref={videoRef} className="hidden" playsInline muted />
+          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover" />
+          
+          {/* Top bar */}
+          <div className="relative z-10 flex items-start justify-between p-4">
+            <button
+              onClick={() => setFacingMode(m => m === 'user' ? 'environment' : 'user')}
+              className="w-12 h-12 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center backdrop-blur-sm"
+            >
+              <RotateCw size={20} />
+            </button>
+            
+            <div className="bg-black/50 backdrop-blur-sm text-white px-6 py-2 rounded-full font-semibold">
+              {feedback}
             </div>
             
-            {error && (
-              <div className="mt-3 bg-red-600/90 backdrop-blur-sm text-white px-4 py-3 rounded-xl text-sm flex items-center gap-2 justify-center">
-                <AlertCircle size={18} />
-                {error}
-              </div>
-            )}
+            <button
+              onClick={() => {
+                setCameraEnabled(false);
+                setIsTracking(false);
+              }}
+              className="w-12 h-12 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center backdrop-blur-sm"
+            >
+              <CameraOff size={20} />
+            </button>
           </div>
-
-          {/* Stats panel - right side */}
-          <div className="absolute top-6 right-4 lg:right-6 z-10 flex flex-col gap-3">
-            {/* Count */}
-            <div className="backdrop-blur-xl bg-gradient-to-br from-purple-900/60 to-pink-900/60 border-2 border-purple-500/50 rounded-2xl px-6 py-4 shadow-2xl">
-              <div className="text-white text-5xl lg:text-6xl font-black text-center">{count}</div>
-              <div className="text-purple-200 text-xs lg:text-sm font-semibold text-center mt-1">REPS</div>
-            </div>
-            
-            {/* Duration */}
-            <div className="backdrop-blur-xl bg-gradient-to-br from-blue-900/60 to-cyan-900/60 border-2 border-blue-500/50 rounded-2xl px-5 py-3 shadow-2xl">
-              <div className="text-white text-2xl lg:text-3xl font-bold text-center">{formatTime(duration)}</div>
-              <div className="text-blue-200 text-xs font-semibold text-center">TIME</div>
-            </div>
-            
-            {/* Pose status */}
-            <div className={`backdrop-blur-xl rounded-xl px-4 py-2 shadow-xl border-2 ${
-              poseDetected 
-                ? 'bg-green-900/60 border-green-500/50' 
-                : 'bg-red-900/60 border-red-500/50'
-            }`}>
-              <div className="text-white text-xs lg:text-sm font-bold text-center">
-                {poseDetected ? '✓ TRACKING' : '✗ NO POSE'}
-              </div>
-            </div>
-            
-            {/* View mode */}
-            {isTracking && viewMode !== 'unknown' && (
-              <div className={`backdrop-blur-xl rounded-xl px-4 py-2 shadow-xl border-2 ${
-                viewLocked 
-                  ? 'bg-purple-900/60 border-purple-500/50' 
-                  : 'bg-orange-900/60 border-orange-500/50'
-              }`}>
-                <div className="text-white text-xs lg:text-sm font-bold text-center">
-                  {viewLocked ? '🔒 ' : '👀 '}
-                  {viewMode === 'front' ? 'FRONT' : 
-                   viewMode === 'left_side' ? 'LEFT' : 'RIGHT'}
+          
+          {/* Stats */}
+          <div className="flex-1 relative z-10 flex flex-col justify-end pointer-events-none">
+            <div className="absolute top-0 right-0 p-4 pointer-events-auto">
+              <div className="flex flex-col items-end gap-3">
+                <div className="bg-black/50 backdrop-blur-sm rounded-2xl px-6 py-4 text-center min-w-[100px]">
+                  <div className="text-5xl font-bold text-white">{count}</div>
+                  <div className="text-zinc-400 text-sm">reps</div>
+                </div>
+                
+                <div className="bg-black/50 backdrop-blur-sm rounded-xl px-5 py-2 text-center">
+                  <div className="text-2xl font-semibold text-white font-mono">
+                    {formatTime(duration)}
+                  </div>
+                </div>
+                
+                {isTracking && (
+                  <div className="bg-black/50 backdrop-blur-sm rounded-xl px-4 py-2 text-center">
+                    <div className="text-lg font-semibold text-amber-400">
+                      {currentAngle.toFixed(0)}°
+                    </div>
+                    <div className="text-zinc-400 text-xs">elbow</div>
+                  </div>
+                )}
+                
+                <div className={`rounded-lg px-3 py-1.5 backdrop-blur-sm ${
+                  poseDetected ? 'bg-emerald-500/30' : 'bg-black/50'
+                }`}>
+                  <div className={`text-xs font-medium ${
+                    poseDetected ? 'text-emerald-300' : 'text-zinc-500'
+                  }`}>
+                    {poseDetected ? '● Tracking' : '○ No pose'}
+                  </div>
                 </div>
               </div>
-            )}
-            
-            {/* Pre-tracking view preview */}
-            {!isTracking && !sessionEnded && viewMode !== 'unknown' && poseDetected && (
-              <div className="backdrop-blur-xl bg-cyan-900/60 border-2 border-cyan-500/50 rounded-xl px-4 py-2 shadow-xl">
-                <div className="text-white text-xs lg:text-sm font-semibold text-center">
-                  📷 {viewMode === 'front' ? 'FRONT' : 
-                      viewMode === 'left_side' ? 'LEFT' : 'RIGHT'}
+            </div>
+          </div>
+          
+          {/* Controls */}
+          <div className="relative z-10 p-4 pointer-events-auto">
+            <div className="flex justify-center gap-3">
+              {!isTracking && !sessionEnded && (
+                <button
+                  onClick={startTracking}
+                  disabled={!poseDetected}
+                  className="flex-1 max-w-xs bg-emerald-500 hover:bg-emerald-600 disabled:bg-zinc-700 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2"
+                >
+                  <Play size={22} fill="white" />
+                  Start Counting
+                </button>
+              )}
+              
+              {isTracking && (
+                <div className="flex gap-3 w-full max-w-md">
+                  <button
+                    onClick={() => setIsPaused(p => !p)}
+                    className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2"
+                  >
+                    {isPaused ? <Play size={20} fill="white" /> : <Pause size={20} />}
+                    {isPaused ? 'Resume' : 'Pause'}
+                  </button>
+                  <button
+                    onClick={endTracking}
+                    className="flex-1 bg-red-500 hover:bg-red-600 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2"
+                  >
+                    <Square size={20} fill="white" />
+                    End
+                  </button>
                 </div>
-              </div>
-            )}
-            
-            {/* State indicator */}
-            {isTracking && (
-              <div className={`backdrop-blur-xl rounded-xl px-4 py-2 shadow-xl border-2 font-black text-xs lg:text-sm uppercase tracking-wider ${
-                state === 'get_ready' ? 'bg-yellow-900/60 border-yellow-500/50 text-yellow-100' :
-                state === 'plank' ? 'bg-blue-900/60 border-blue-500/50 text-blue-100' :
-                state === 'down' ? 'bg-red-900/60 border-red-500/50 text-red-100' :
-                'bg-green-900/60 border-green-500/50 text-green-100'
-              }`}>
-                <div className="text-center">{state.replace('_', ' ')}</div>
-              </div>
-            )}
-          </div>
-
-          {/* Control buttons */}
-          <div className="absolute bottom-8 lg:bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-4 z-10">
-            {!isTracking && !sessionEnded ? (
-              <button
-                onClick={startTracking}
-                disabled={!poseDetected && poseRef.current !== null}
-                className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed text-white px-8 lg:px-12 py-4 lg:py-5 rounded-full font-black text-base lg:text-xl shadow-2xl transition-all transform hover:scale-105 disabled:scale-100 flex items-center gap-3"
-              >
-                <Play size={24} fill="white" />
-                START
-              </button>
-            ) : isTracking ? (
-              <>
+              )}
+              
+              {sessionEnded && (
                 <button
-                  onClick={togglePause}
-                  className="backdrop-blur-xl bg-cyan-600/90 hover:bg-cyan-700 border-2 border-cyan-400/50 text-white px-6 lg:px-10 py-4 rounded-full font-bold shadow-2xl transition-all transform hover:scale-105 flex items-center gap-2"
+                  onClick={startTracking}
+                  className="flex-1 max-w-xs bg-zinc-800 hover:bg-zinc-700 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2"
                 >
-                  {isPaused ? (
-                    <>
-                      <Play size={20} fill="white" />
-                      <span className="hidden sm:inline">Resume</span>
-                    </>
-                  ) : (
-                    <>
-                      <Pause size={20} fill="white" />
-                      <span className="hidden sm:inline">Pause</span>
-                    </>
-                  )}
+                  <RotateCw size={20} />
+                  New Session
                 </button>
-                <button
-                  onClick={endTracking}
-                  className="backdrop-blur-xl bg-red-600/90 hover:bg-red-700 border-2 border-red-400/50 text-white px-6 lg:px-10 py-4 rounded-full font-bold shadow-2xl transition-all transform hover:scale-105 flex items-center gap-2"
-                >
-                  <Square size={20} fill="white" />
-                  <span className="hidden sm:inline">End</span>
-                </button>
-              </>
-            ) : sessionEnded && count > 0 && !isSessionSaved ? (
-              <button
-                onClick={saveSession}
-                disabled={isSaving || !currentUser || count === 0}
-                className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 disabled:from-gray-600 disabled:to-gray-700 disabled:opacity-50 text-white px-8 lg:px-12 py-4 lg:py-5 rounded-full font-black shadow-2xl transition-all transform hover:scale-105 flex items-center gap-3"
-              >
-                <Save size={24} />
-                {isSaving ? 'SAVING...' : 'SAVE SESSION'}
-              </button>
-            ) : sessionEnded && isSessionSaved ? (
-              <div className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-8 lg:px-12 py-4 lg:py-5 rounded-full font-black shadow-2xl flex items-center gap-3">
-                <Save size={24} />
-                SAVED!
-              </div>
-            ) : null}
+              )}
+            </div>
           </div>
-
-          {/* Camera controls */}
-          <button
-            onClick={toggleCamera}
-            className="absolute bottom-8 right-4 lg:right-6 z-10 backdrop-blur-xl bg-gray-800/80 hover:bg-gray-700/80 border-2 border-gray-600/50 text-white p-4 rounded-full transition-all shadow-2xl transform hover:scale-110"
-            title="Flip Camera"
-          >
-            <RotateCw size={22} />
-          </button>
-
-          <button
-            onClick={() => {
-              setCameraEnabled(false);
-              setIsTracking(false);
-            }}
-            className="absolute bottom-8 left-4 lg:left-6 z-10 backdrop-blur-xl bg-gray-800/80 hover:bg-gray-700/80 border-2 border-gray-600/50 text-white p-4 rounded-full transition-all shadow-2xl transform hover:scale-110"
-            title="Disable Camera"
-          >
-            <CameraOff size={22} />
-          </button>
         </>
       )}
     </div>
