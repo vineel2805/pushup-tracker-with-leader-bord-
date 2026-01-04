@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Square, Camera, CameraOff, RotateCw, Loader2, Save, Check, Volume2, VolumeX } from 'lucide-react';
+import { Play, Pause, Square, Camera, CameraOff, RotateCw, Loader2, Save, Check, Volume2, VolumeX, Mic, MicOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { addSession } from '../services/firestoreService';
 import { voiceAgent } from '../services/voiceAgentService';
@@ -173,6 +173,7 @@ export function TrackPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(voiceAgent.getConfig().enabled);
+  const [isListening, setIsListening] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -485,6 +486,18 @@ export function TrackPage() {
     voiceAgent.announceSessionEnd(count, duration);
   };
   
+  const resetSession = () => {
+    detectorRef.current.reset();
+    lastAnnouncedCountRef.current = 0;
+    setCount(0);
+    setDuration(0);
+    setIsTracking(false);
+    setIsPaused(false);
+    setSessionEnded(false);
+    setIsSaved(false);
+    setFeedback('Ready to start');
+  };
+  
   const toggleVoice = () => {
     const newEnabled = !voiceEnabled;
     setVoiceEnabled(newEnabled);
@@ -510,6 +523,74 @@ export function TrackPage() {
       setFeedback('Failed to save');
     } finally {
       setIsSaving(false);
+    }
+  };
+  
+  // Voice command registration
+  useEffect(() => {
+    voiceAgent.registerCommandCallbacks({
+      onStart: () => {
+        if (!isTracking && cameraEnabled && !modelLoading) {
+          startTracking();
+        }
+      },
+      onStop: () => {
+        if (isTracking) {
+          endTracking();
+        }
+      },
+      onPause: () => {
+        if (isTracking && !isPaused) {
+          togglePause();
+        }
+      },
+      onResume: () => {
+        if (isTracking && isPaused) {
+          togglePause();
+        }
+      },
+      onSave: () => {
+        if (sessionEnded && !isSaved && count > 0 && currentUser) {
+          saveSession();
+        }
+      },
+      onReset: () => {
+        resetSession();
+      },
+      onFlipCamera: () => {
+        if (cameraEnabled) {
+          setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
+        }
+      },
+    });
+
+    // Start listening if voice commands enabled
+    const config = voiceAgent.getConfig();
+    if (config.enabled && config.voiceCommands && cameraEnabled) {
+      voiceAgent.startListening();
+    }
+
+    return () => {
+      voiceAgent.unregisterCommandCallbacks();
+    };
+  }, [isTracking, isPaused, sessionEnded, isSaved, count, currentUser, cameraEnabled, modelLoading]);
+
+  // Sync listening state
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setIsListening(voiceAgent.isCurrentlyListening());
+    }, 500);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Toggle voice listening
+  const toggleVoiceListening = () => {
+    if (isListening) {
+      voiceAgent.stopListening();
+      setIsListening(false);
+    } else {
+      voiceAgent.startListening();
+      setIsListening(true);
     }
   };
   
@@ -569,6 +650,24 @@ export function TrackPage() {
               >
                 {voiceEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
               </button>
+              {/* Voice Commands Indicator */}
+              {voiceEnabled && voiceAgent.isVoiceCommandsSupported() && voiceAgent.getConfig().voiceCommands && (
+                <button
+                  onClick={toggleVoiceListening}
+                  className={`w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-sm transition-all ${
+                    isListening 
+                      ? 'bg-red-500 animate-pulse' 
+                      : 'bg-black/50 hover:bg-black/70'
+                  }`}
+                  title={isListening ? "Listening for commands (click to stop)" : "Start listening for commands"}
+                >
+                  {isListening ? (
+                    <Mic size={20} className="text-white" />
+                  ) : (
+                    <MicOff size={20} className="text-white" />
+                  )}
+                </button>
+              )}
             </div>
             
             <div className="bg-black/50 backdrop-blur-sm text-white px-6 py-2 rounded-full font-semibold">

@@ -18,10 +18,11 @@ An AI-powered push-up counter with real-time pose detection, leaderboard, and so
 
 ### User Experience
 - **User Authentication** - Secure sign-up, login, Google auth, and email verification
+- **Voice Agent** - Audio feedback during workouts with rep announcements, milestone alerts, and motivational messages
 - **Dashboard** - View daily progress and statistics at a glance
 - **Analytics** - Visualize your fitness journey with interactive charts
 - **History** - Browse past workout sessions
-- **Settings** - Customize theme, notifications, and privacy settings
+- **Settings** - Customize theme, notifications, privacy, and voice agent settings
 - **Responsive Design** - Works seamlessly on desktop and mobile
 
 ## 🛠️ Tech Stack
@@ -32,6 +33,7 @@ An AI-powered push-up counter with real-time pose detection, leaderboard, and so
 | **Styling** | Tailwind CSS 4, Radix UI, Lucide Icons |
 | **Backend** | Firebase (Auth, Firestore, Storage) |
 | **AI/ML** | MediaPipe Pose Detection |
+| **Voice** | Web Speech API |
 | **Charts** | Recharts |
 | **Animations** | Framer Motion |
 | **Forms** | React Hook Form |

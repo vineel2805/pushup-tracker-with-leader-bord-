@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Volume2, VolumeX, Play } from 'lucide-react';
+import { Volume2, VolumeX, Play, Mic, MicOff } from 'lucide-react';
 import { voiceAgent, VoiceAgentConfig } from '../services/voiceAgentService';
 import { Switch } from './ui/switch';
 import { Slider } from './ui/slider';
@@ -12,9 +12,11 @@ interface VoiceAgentSettingsProps {
 export function VoiceAgentSettings({ className = '' }: VoiceAgentSettingsProps) {
   const [config, setConfig] = useState<VoiceAgentConfig>(voiceAgent.getConfig());
   const [isSupported, setIsSupported] = useState(true);
+  const [voiceCommandsSupported, setVoiceCommandsSupported] = useState(false);
 
   useEffect(() => {
     setIsSupported(voiceAgent.isSupported());
+    setVoiceCommandsSupported(voiceAgent.isVoiceCommandsSupported());
   }, []);
 
   const updateConfig = (updates: Partial<VoiceAgentConfig>) => {
@@ -63,6 +65,72 @@ export function VoiceAgentSettings({ className = '' }: VoiceAgentSettingsProps) 
 
       {config.enabled && (
         <>
+          {/* Voice Commands - NEW */}
+          <div className="py-3 border-t border-zinc-800">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 pr-4">
+                <div className="flex items-center gap-2">
+                  {config.voiceCommands ? (
+                    <Mic className="w-4 h-4 text-blue-400" />
+                  ) : (
+                    <MicOff className="w-4 h-4 text-zinc-500" />
+                  )}
+                  <span className="text-[13px] text-zinc-300">Voice Commands</span>
+                </div>
+                <p className="text-[11px] text-zinc-600 mt-0.5">
+                  Control workout with your voice (hands-free)
+                </p>
+              </div>
+              {voiceCommandsSupported ? (
+                <Switch
+                  checked={config.voiceCommands}
+                  onCheckedChange={(checked) => updateConfig({ voiceCommands: checked })}
+                />
+              ) : (
+                <span className="text-[10px] text-red-400 bg-red-500/10 px-2 py-1 rounded">
+                  Not supported
+                </span>
+              )}
+            </div>
+
+            {/* Voice Commands Help */}
+            {config.voiceCommands && voiceCommandsSupported && (
+              <div className="mt-3 p-3 bg-zinc-800/50 rounded-lg">
+                <p className="text-[11px] text-zinc-400 mb-2">Available commands:</p>
+                <div className="grid grid-cols-2 gap-1 text-[11px]">
+                  <div className="flex items-center gap-1">
+                    <span className="text-green-400">•</span>
+                    <span className="text-zinc-500">"Start" / "Begin" / "Go"</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-yellow-400">•</span>
+                    <span className="text-zinc-500">"Pause" / "Wait"</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-blue-400">•</span>
+                    <span className="text-zinc-500">"Resume" / "Continue"</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-red-400">•</span>
+                    <span className="text-zinc-500">"Stop" / "End" / "Finish"</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-purple-400">•</span>
+                    <span className="text-zinc-500">"Save" / "Save session"</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-orange-400">•</span>
+                    <span className="text-zinc-500">"Reset" / "New session"</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-cyan-400">•</span>
+                    <span className="text-zinc-500">"Flip" / "Switch camera"</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Volume Control */}
           <div className="py-3 border-t border-zinc-800">
             <div className="flex items-center justify-between mb-3">

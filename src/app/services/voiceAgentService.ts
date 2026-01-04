@@ -1,7 +1,56 @@
 /**
  * Voice Agent Service
  * Uses Web Speech API to provide audio feedback during workouts
+ * Also supports voice recognition for hands-free control
  */
+
+// Type declarations for Web Speech API (not included in all TypeScript versions)
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+  resultIndex: number;
+}
+
+interface SpeechRecognitionResultList {
+  length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+  isFinal: boolean;
+  length: number;
+  item(index: number): SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+  message: string;
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition: new () => SpeechRecognition;
+    webkitSpeechRecognition: new () => SpeechRecognition;
+  }
+}
 
 export interface VoiceAgentConfig {
   enabled: boolean;
@@ -11,6 +60,28 @@ export interface VoiceAgentConfig {
   milestoneAlerts: boolean; // Every 5 reps
   motivationalMessages: boolean;
   sessionAnnouncements: boolean;
+  voiceCommands: boolean; // NEW: Enable voice recognition
+}
+
+// Voice command types
+type VoiceCommand = 
+  | 'start'
+  | 'stop'
+  | 'pause'
+  | 'resume'
+  | 'save'
+  | 'reset'
+  | 'flip_camera'
+  | 'unknown';
+
+export interface VoiceCommandCallback {
+  onStart?: () => void;
+  onStop?: () => void;
+  onPause?: () => void;
+  onResume?: () => void;
+  onSave?: () => void;
+  onReset?: () => void;
+  onFlipCamera?: () => void;
 }
 
 const DEFAULT_CONFIG: VoiceAgentConfig = {
@@ -21,6 +92,7 @@ const DEFAULT_CONFIG: VoiceAgentConfig = {
   milestoneAlerts: true,
   motivationalMessages: true,
   sessionAnnouncements: true,
+  voiceCommands: false, // Off by default
 };
 
 const STORAGE_KEY = 'voiceAgentConfig';
@@ -55,10 +127,17 @@ class VoiceAgentService {
   private lastMotivationalIndex = -1;
   private isSpeaking = false;
   private speechQueue: string[] = [];
+  
+  // Voice recognition
+  private recognition: SpeechRecognition | null = null;
+  private recognitionSupported: boolean = false;
+  private isListening: boolean = false;
+  private commandCallbacks: VoiceCommandCallback = {};
 
   constructor() {
     this.config = this.loadConfig();
     this.initSynth();
+    this.initRecognition();
   }
 
   private initSynth() {
@@ -78,6 +157,186 @@ class VoiceAgentService {
         this.synth.onvoiceschanged = loadVoices;
       }
     }
+  }
+
+  private initRecognition() {
+    if (typeof window === 'undefined') return;
+
+    const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    
+    if (!SpeechRecognitionAPI) {
+      console.log('Speech recognition not supported in this browser');
+      this.recognitionSupported = false;
+      return;
+    }
+
+    this.recognitionSupported = true;
+    const recognition = new SpeechRecognitionAPI() as SpeechRecognition;
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      const last = event.results.length - 1;
+      const transcript = event.results[last][0].transcript.toLowerCase().trim();
+      console.log('🎤 Voice command heard:', transcript);
+      this.processCommand(transcript);
+    };
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.log('Speech recognition error:', event.error);
+      if (event.error === 'no-speech' || event.error === 'audio-capture' || event.error === 'aborted') {
+        if (this.isListening && this.config.voiceCommands) {
+          setTimeout(() => this.restartListening(), 500);
+        }
+      }
+    };
+
+    recognition.onend = () => {
+      if (this.isListening && this.config.voiceCommands && this.config.enabled) {
+        setTimeout(() => this.restartListening(), 500);
+      }
+    };
+    
+    this.recognition = recognition;
+  }
+
+  private processCommand(transcript: string): void {
+    if (!this.config.voiceCommands) return;
+    
+    const command = this.parseCommand(transcript);
+    if (command === 'unknown') return;
+
+    // Speak confirmation
+    this.speakCommandConfirmation(command);
+
+    // Execute callback
+    switch (command) {
+      case 'start':
+        this.commandCallbacks.onStart?.();
+        break;
+      case 'stop':
+        this.commandCallbacks.onStop?.();
+        break;
+      case 'pause':
+        this.commandCallbacks.onPause?.();
+        break;
+      case 'resume':
+        this.commandCallbacks.onResume?.();
+        break;
+      case 'save':
+        this.commandCallbacks.onSave?.();
+        break;
+      case 'reset':
+        this.commandCallbacks.onReset?.();
+        break;
+      case 'flip_camera':
+        this.commandCallbacks.onFlipCamera?.();
+        break;
+    }
+  }
+
+  private parseCommand(transcript: string): VoiceCommand {
+    const text = transcript.toLowerCase().trim();
+
+    // Start commands
+    if (text.includes('start') || text.includes('begin') || text.includes('let\'s go') || text === 'go') {
+      return 'start';
+    }
+    // Stop commands
+    if (text.includes('stop') || text.includes('end') || text.includes('finish') || text.includes('done')) {
+      return 'stop';
+    }
+    // Pause commands
+    if (text.includes('pause') || text.includes('wait') || text.includes('hold') || text.includes('break')) {
+      return 'pause';
+    }
+    // Resume commands
+    if (text.includes('resume') || text.includes('continue') || text.includes('unpause')) {
+      return 'resume';
+    }
+    // Save commands
+    if (text.includes('save')) {
+      return 'save';
+    }
+    // Reset commands
+    if (text.includes('reset') || text.includes('restart') || text.includes('new session')) {
+      return 'reset';
+    }
+    // Flip camera
+    if (text.includes('flip') || text.includes('switch camera') || text.includes('camera')) {
+      return 'flip_camera';
+    }
+
+    return 'unknown';
+  }
+
+  private speakCommandConfirmation(command: VoiceCommand): void {
+    const confirmations: Record<VoiceCommand, string> = {
+      start: 'Starting',
+      stop: 'Stopping',
+      pause: 'Pausing',
+      resume: 'Resuming',
+      save: 'Saving',
+      reset: 'Resetting',
+      flip_camera: 'Flipping camera',
+      unknown: '',
+    };
+
+    if (confirmations[command]) {
+      this.speak(confirmations[command], true);
+    }
+  }
+
+  // Public methods for voice commands
+  registerCommandCallbacks(callbacks: VoiceCommandCallback): void {
+    this.commandCallbacks = callbacks;
+  }
+
+  unregisterCommandCallbacks(): void {
+    this.commandCallbacks = {};
+  }
+
+  startListening(): void {
+    if (!this.recognitionSupported || !this.recognition) return;
+    if (!this.config.voiceCommands || !this.config.enabled) return;
+    if (this.isListening) return;
+
+    try {
+      this.recognition.start();
+      this.isListening = true;
+      console.log('🎤 Listening for voice commands...');
+    } catch (e) {
+      console.log('Failed to start listening:', e);
+    }
+  }
+
+  stopListening(): void {
+    if (!this.recognition) return;
+    this.isListening = false;
+    try {
+      this.recognition.stop();
+      console.log('🎤 Stopped listening');
+    } catch (e) {
+      // Ignore errors when stopping
+    }
+  }
+
+  private restartListening(): void {
+    if (!this.recognition || !this.isListening) return;
+    try {
+      this.recognition.start();
+    } catch (e) {
+      // May already be running
+    }
+  }
+
+  isVoiceCommandsSupported(): boolean {
+    return this.recognitionSupported;
+  }
+
+  isCurrentlyListening(): boolean {
+    return this.isListening;
   }
 
   private selectVoice() {
@@ -142,6 +401,14 @@ class VoiceAgentService {
     // Re-select voice if voice type changed
     if (config.voiceType) {
       this.selectVoice();
+    }
+    // Handle voice commands toggle
+    if ('voiceCommands' in config || 'enabled' in config) {
+      if (this.config.enabled && this.config.voiceCommands) {
+        this.startListening();
+      } else {
+        this.stopListening();
+      }
     }
   }
 
@@ -302,9 +569,10 @@ class VoiceAgentService {
    * Test the voice with a sample message
    */
   testVoice() {
-    this.speak("Voice agent is working. Let's crush this workout!", true);
+    this.speak("Voice agent is ready. You can also use voice commands like start, pause, or save.", true);
   }
 }
 
 // Export singleton instance
 export const voiceAgent = new VoiceAgentService();
+export type { VoiceCommand };
