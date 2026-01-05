@@ -2,14 +2,20 @@
 
 An AI-powered push-up counter with real-time pose detection, voice commands, audio feedback, and social features. Built with React, TypeScript, MediaPipe, and Firebase.
 
-![Track & Grow](https://img.shields.io/badge/version-2.0.0-green) ![React](https://img.shields.io/badge/React-18-blue) ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue) ![Firebase](https://img.shields.io/badge/Firebase-10-orange)
+![Track & Grow](https://img.shields.io/badge/version-2.1.0-green) ![React](https://img.shields.io/badge/React-18-blue) ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue) ![Firebase](https://img.shields.io/badge/Firebase-10-orange)
 
 ## 🎯 Features
 
 ### Core Features
-- **AI Push-Up Detection** - Real-time rep counting using MediaPipe pose detection with elbow angle tracking
+- **AI Push-Up Detection** - Real-time rep counting using MediaPipe pose detection
+  - **Elbow Angle Tracking** - Detects arm bending (UP: ≥140°, DOWN: ≤110°)
+  - **Face Motion Validation** - Prevents false counts from arm-only movements
+  - **Smart State Machine** - Tracks UP → DOWN → UP cycle for accurate rep counting
 - **Live Camera Preview** - See yourself with skeleton overlay and joint highlights
+  - Responsive point sizes that scale with screen size
+  - Face landmarks (cyan), elbows (red), other joints (yellow)
 - **Session Tracking** - Track reps, duration, and save workouts to your profile
+- **Auto-Pause** - Automatically pauses when face/pose is lost for 2+ seconds
 
 ### Voice Agent
 - **Voice Commands** - Hands-free control with speech recognition
@@ -21,6 +27,13 @@ An AI-powered push-up counter with real-time pose detection, voice commands, aud
   - Milestone alerts (10, 25, 50, 100 reps)
   - Motivational messages to keep you going
   - Session start/stop announcements
+
+### Real-Time Debug Dashboard
+During tracking, see live metrics:
+- **State Indicator** - Current position (UP/DOWN)
+- **Elbow Angle** - Real-time angle in degrees
+- **Face Visibility** - Whether your face is detected
+- **Face Movement** - Vertical travel percentage for validation
 
 ### Social Features
 - **Leaderboard** - Compete with friends and see top performers
@@ -35,6 +48,28 @@ An AI-powered push-up counter with real-time pose detection, voice commands, aud
 - **Settings** - Customize theme, notifications, privacy, and voice agent settings
 - **Collapsible Sidebar** - Clean navigation with expand/collapse toggle
 - **Responsive Design** - Works seamlessly on desktop and mobile
+
+## 🏋️ How Push-Up Detection Works
+
+The detection uses a two-factor validation system:
+
+1. **Elbow Angle Detection**
+   - Calculates angle at elbow joint (shoulder → elbow → wrist)
+   - UP position: Elbow angle ≥ 140° (arms extended)
+   - DOWN position: Elbow angle ≤ 110° (arms bent)
+
+2. **Face Motion Validation**
+   - Tracks vertical face movement (nose/eyes) during rep
+   - Prevents counting when just bending arms while sitting/standing
+   - Threshold: ~1.5% of frame height vertical travel required
+
+3. **State Machine**
+   ```
+   UP → (elbows bend) → DOWN → (elbows extend + face moved) → UP = 1 REP
+   ```
+
+4. **Debounce**
+   - Minimum 300ms between reps to prevent double-counting
 
 ## 🛠️ Tech Stack
 
@@ -184,6 +219,22 @@ firebase deploy
 ## 👨‍💻 Author
 
 **Vineel** - [GitHub](https://github.com/vineel2805)
+
+## 📝 Changelog
+
+### v2.1.0 (January 2026)
+- ✨ Added face motion validation to prevent false rep counts
+- ✨ Auto-pause when face/pose is lost for 2+ seconds
+- ✨ Real-time debug dashboard showing state, angle, face visibility, and movement
+- 🎨 Responsive skeleton point sizes for mobile
+- ⚡ Optimized canvas rendering with single save/restore
+- 🐛 Fixed face landmark tracking for accurate motion detection
+
+### v2.0.0
+- Initial release with AI push-up detection
+- Voice commands and audio feedback
+- Social features (leaderboard, friends, public profiles)
+- Firebase authentication and data storage
 
 ---
 
