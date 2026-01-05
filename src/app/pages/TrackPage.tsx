@@ -8,15 +8,22 @@ import { voiceAgent } from '../services/voiceAgentService';
 // CONFIGURATION - Simple and Relaxed
 // ============================================================================
 const CONFIG = {
-  // Elbow angle thresholds (degrees) - VERY RELAXED
-  UP_ANGLE: 140,              // Arms fairly straight = up position
-  DOWN_ANGLE: 100,            // Elbows bent = down position
+  // Elbow angle thresholds (degrees) - RELAXED for front camera
+  UP_ANGLE_MIN: 140,          // Arms fairly straight = up position (min)
+  UP_ANGLE_MAX: 180,          // Arms fully straight (max)
+  DOWN_ANGLE_MIN: 70,         // Elbows very bent (min)
+  DOWN_ANGLE_MAX: 110,        // Elbows bent = down position (max)
+  
+  // Face vertical movement thresholds (normalized coordinates 0-1)
+  // Face Y increases when moving DOWN in the frame
+  FACE_MOVE_THRESHOLD: 0.015, // Reduced threshold for easier detection
+  FACE_MIN_VISIBILITY: 0.3,   // Lowered visibility requirement
   
   // Timing
-  MIN_REP_TIME_MS: 300,       // Minimum time for valid rep
+  MIN_REP_TIME_MS: 300,       // Minimum time for valid rep (debounce)
   
-  // Visibility - VERY RELAXED
-  MIN_VISIBILITY: 0.2,        // Accept lower visibility
+  // Visibility - RELAXED for body landmarks
+  MIN_VISIBILITY: 0.2,        // Accept lower visibility for arms
   
   // FPS
   POSE_FPS: 20,
@@ -67,25 +74,74 @@ const calculateAngle = (a: any, b: any, c: any): number => {
 };
 
 // ============================================================================
-// PUSH-UP DETECTION LOGIC - SIMPLIFIED
+// PUSH-UP DETECTION LOGIC - ELBOW ANGLE + FACE MOTION VALIDATION
 // ============================================================================
 type State = 'up' | 'down';
 
+interface DetectionResult {
+  state: State;
+  count: number;
+  feedback: string;
+  angle: number;
+  faceY: number;        // Current face Y position (for debugging)
+  faceValid: boolean;   // Whether face motion was validated
+  faceVisible: boolean; // Whether face is currently visible
+  faceMovement: number; // How much face moved (for debugging)
+}
+
 class PushUpDetector {
+  // Core state
   state: State = 'up';
   count = 0;
   lastRepTime = 0;
+  
+  // Face tracking - we track the HIGHEST and LOWEST face Y positions
+  private maxFaceY = 0;        // Highest Y value seen (lowest position in frame)
+  private minFaceY = 1;        // Lowest Y value seen (highest position in frame)
+  private lastFaceMovement = 0;
   
   reset() {
     this.state = 'up';
     this.count = 0;
     this.lastRepTime = 0;
+    this.maxFaceY = 0;
+    this.minFaceY = 1;
+    this.lastFaceMovement = 0;
   }
   
-  detect(landmarks: any[]): { state: State; count: number; feedback: string; angle: number } {
-    const now = Date.now();
+  /**
+   * Get face Y position from landmarks (using nose as primary, eyes as fallback)
+   * Returns normalized Y coordinate (0 = top, 1 = bottom)
+   */
+  private getFaceY(landmarks: any[]): number | null {
+    const nose = landmarks[LM.NOSE];
+    const leftEye = landmarks[LM.LEFT_EYE];
+    const rightEye = landmarks[LM.RIGHT_EYE];
     
-    // Get landmarks - be very lenient
+    // Prefer nose if visible enough
+    if (nose && nose.visibility >= CONFIG.FACE_MIN_VISIBILITY) {
+      return nose.y;
+    }
+    
+    // Fallback to average of eyes
+    if (leftEye && rightEye && 
+        leftEye.visibility >= CONFIG.FACE_MIN_VISIBILITY &&
+        rightEye.visibility >= CONFIG.FACE_MIN_VISIBILITY) {
+      return (leftEye.y + rightEye.y) / 2;
+    }
+    
+    // Last resort: use any visible face landmark with lower threshold
+    if (nose && nose.visibility >= 0.1) {
+      return nose.y;
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Calculate average elbow angle from visible arms
+   */
+  private getElbowAngle(landmarks: any[]): number | null {
     const leftShoulder = landmarks[LM.LEFT_SHOULDER];
     const rightShoulder = landmarks[LM.RIGHT_SHOULDER];
     const leftElbow = landmarks[LM.LEFT_ELBOW];
@@ -93,64 +149,196 @@ class PushUpDetector {
     const leftWrist = landmarks[LM.LEFT_WRIST];
     const rightWrist = landmarks[LM.RIGHT_WRIST];
     
-    // Calculate elbow angle - use whichever arm is more visible
-    let elbowAngle = 0;
+    let totalAngle = 0;
     let armCount = 0;
     
-    // Left arm
-    if (leftShoulder && leftElbow && leftWrist) {
-      const leftAngle = calculateAngle(leftShoulder, leftElbow, leftWrist);
-      if (!isNaN(leftAngle)) {
-        elbowAngle += leftAngle;
+    // Left arm angle
+    if (leftShoulder && leftElbow && leftWrist &&
+        isVisible(leftShoulder) && isVisible(leftElbow) && isVisible(leftWrist)) {
+      const angle = calculateAngle(leftShoulder, leftElbow, leftWrist);
+      if (!isNaN(angle)) {
+        totalAngle += angle;
         armCount++;
       }
     }
     
-    // Right arm
-    if (rightShoulder && rightElbow && rightWrist) {
-      const rightAngle = calculateAngle(rightShoulder, rightElbow, rightWrist);
-      if (!isNaN(rightAngle)) {
-        elbowAngle += rightAngle;
+    // Right arm angle
+    if (rightShoulder && rightElbow && rightWrist &&
+        isVisible(rightShoulder) && isVisible(rightElbow) && isVisible(rightWrist)) {
+      const angle = calculateAngle(rightShoulder, rightElbow, rightWrist);
+      if (!isNaN(angle)) {
+        totalAngle += angle;
         armCount++;
       }
     }
     
-    if (armCount === 0) {
-      return { state: this.state, count: this.count, feedback: 'Show your arms', angle: 0 };
+    return armCount > 0 ? totalAngle / armCount : null;
+  }
+  
+  /**
+   * Main detection function - combines elbow angle with face motion validation
+   * 
+   * SIMPLE LOGIC:
+   * 1. Track min/max face Y during the whole rep cycle
+   * 2. When completing a rep (DOWN→UP), check if face traveled enough distance
+   * 3. The face travel = maxFaceY - minFaceY (how much vertical movement occurred)
+   */
+  detect(landmarks: any[]): DetectionResult {
+    const now = Date.now();
+    
+    // Get elbow angle
+    const elbowAngle = this.getElbowAngle(landmarks);
+    if (elbowAngle === null) {
+      return {
+        state: this.state,
+        count: this.count,
+        feedback: 'Show your arms',
+        angle: 0,
+        faceY: 0,
+        faceValid: false,
+        faceVisible: false,
+        faceMovement: 0,
+      };
     }
     
-    elbowAngle = elbowAngle / armCount; // Average
+    // Get face Y position
+    const faceY = this.getFaceY(landmarks);
+    const faceVisible = faceY !== null;
     
-    // Simple state machine - just track up/down based on elbow angle
-    const isUp = elbowAngle > CONFIG.UP_ANGLE;
-    const isDown = elbowAngle < CONFIG.DOWN_ANGLE;
-    
-    // State transitions
-    if (this.state === 'up' && isDown) {
-      this.state = 'down';
-      return { state: this.state, count: this.count, feedback: 'Push up!', angle: elbowAngle };
+    // Track min/max face Y throughout the rep
+    if (faceVisible) {
+      this.maxFaceY = Math.max(this.maxFaceY, faceY);
+      this.minFaceY = Math.min(this.minFaceY, faceY);
+      this.lastFaceMovement = this.maxFaceY - this.minFaceY; // Total vertical travel
     }
     
-    if (this.state === 'down' && isUp) {
-      // Coming back up - count the rep!
-      const timeSinceLastRep = now - this.lastRepTime;
-      
-      if (timeSinceLastRep > CONFIG.MIN_REP_TIME_MS) {
-        this.count++;
-        this.lastRepTime = now;
-        this.state = 'up';
-        return { state: this.state, count: this.count, feedback: `${this.count}!`, angle: elbowAngle };
-      }
-      
-      this.state = 'up';
-    }
+    // Determine elbow position based on angle
+    const isElbowUp = elbowAngle >= CONFIG.UP_ANGLE_MIN;
+    const isElbowDown = elbowAngle <= CONFIG.DOWN_ANGLE_MAX;
     
-    // Feedback based on current state
+    // =========================================================================
+    // STATE MACHINE
+    // =========================================================================
+    
+    // STATE: UP → Check for transition to DOWN
     if (this.state === 'up') {
-      return { state: this.state, count: this.count, feedback: 'Lower down', angle: elbowAngle };
-    } else {
-      return { state: this.state, count: this.count, feedback: 'Extend arms', angle: elbowAngle };
+      if (isElbowDown) {
+        // Transition to DOWN
+        this.state = 'down';
+        
+        return {
+          state: this.state,
+          count: this.count,
+          feedback: 'Push up!',
+          angle: elbowAngle,
+          faceY: faceY ?? 0,
+          faceValid: this.lastFaceMovement > CONFIG.FACE_MOVE_THRESHOLD,
+          faceVisible,
+          faceMovement: this.lastFaceMovement,
+        };
+      }
+      
+      // Still in UP state
+      return {
+        state: this.state,
+        count: this.count,
+        feedback: 'Lower down',
+        angle: elbowAngle,
+        faceY: faceY ?? 0,
+        faceValid: false,
+        faceVisible,
+        faceMovement: this.lastFaceMovement,
+      };
     }
+    
+    // STATE: DOWN → Check for transition to UP (and count rep)
+    if (this.state === 'down') {
+      if (isElbowUp) {
+        const timeSinceLastRep = now - this.lastRepTime;
+        
+        // Check if face traveled enough vertical distance during this rep
+        // This catches the whole up-down-up motion
+        const faceMovedEnough = this.lastFaceMovement > CONFIG.FACE_MOVE_THRESHOLD;
+        
+        // COUNT REP: Valid if face moved enough (or not visible) and debounce passed
+        const validRep = (faceMovedEnough || !faceVisible) && 
+                         timeSinceLastRep > CONFIG.MIN_REP_TIME_MS;
+        
+        if (validRep) {
+          this.count++;
+          this.lastRepTime = now;
+        }
+        
+        // Reset face tracking for next rep
+        this.state = 'up';
+        if (faceVisible) {
+          this.minFaceY = faceY;
+          this.maxFaceY = faceY;
+        } else {
+          this.minFaceY = 1;
+          this.maxFaceY = 0;
+        }
+        
+        if (validRep) {
+          return {
+            state: this.state,
+            count: this.count,
+            feedback: `${this.count}!`,
+            angle: elbowAngle,
+            faceY: faceY ?? 0,
+            faceValid: true,
+            faceVisible,
+            faceMovement: this.lastFaceMovement,
+          };
+        } else if (timeSinceLastRep <= CONFIG.MIN_REP_TIME_MS) {
+          return {
+            state: this.state,
+            count: this.count,
+            feedback: 'Too fast',
+            angle: elbowAngle,
+            faceY: faceY ?? 0,
+            faceValid: false,
+            faceVisible,
+            faceMovement: this.lastFaceMovement,
+          };
+        } else {
+          return {
+            state: this.state,
+            count: this.count,
+            feedback: 'Move body more',
+            angle: elbowAngle,
+            faceY: faceY ?? 0,
+            faceValid: false,
+            faceVisible,
+            faceMovement: this.lastFaceMovement,
+          };
+        }
+      }
+      
+      // Still in DOWN state
+      return {
+        state: this.state,
+        count: this.count,
+        feedback: 'Push up!',
+        angle: elbowAngle,
+        faceY: faceY ?? 0,
+        faceValid: this.lastFaceMovement > CONFIG.FACE_MOVE_THRESHOLD,
+        faceVisible,
+        faceMovement: this.lastFaceMovement,
+      };
+    }
+    
+    // Fallback (should never reach)
+    return {
+      state: this.state,
+      count: this.count,
+      feedback: 'Ready',
+      angle: elbowAngle,
+      faceY: faceY ?? 0,
+      faceValid: false,
+      faceVisible: faceVisible,
+      faceMovement: 0,
+    };
   }
 }
 
@@ -170,6 +358,10 @@ export function TrackPage() {
   const [modelLoading, setModelLoading] = useState(true);
   const [sessionEnded, setSessionEnded] = useState(false);
   const [currentAngle, setCurrentAngle] = useState(0);
+  const [faceValid, setFaceValid] = useState(false);
+  const [faceVisible, setFaceVisible] = useState(false);
+  const [faceMovement, setFaceMovement] = useState(0);
+  const [currentState, setCurrentState] = useState<State>('up');
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(voiceAgent.getConfig().enabled);
@@ -277,6 +469,10 @@ export function TrackPage() {
       // Always run detection to show angle, regardless of tracking state
       const result = detectorRef.current.detect(results.poseLandmarks);
       setCurrentAngle(result.angle);
+      setFaceValid(result.faceValid);
+      setFaceVisible(result.faceVisible);
+      setFaceMovement(result.faceMovement);
+      setCurrentState(result.state);
       
       if (isTrackingRef.current) {
         setFeedback(result.feedback);
@@ -290,6 +486,9 @@ export function TrackPage() {
     } else {
       setPoseDetected(false);
       setCurrentAngle(0);
+      setFaceValid(false);
+      setFaceVisible(false);
+      setFaceMovement(0);
     }
   };
   
@@ -374,7 +573,39 @@ export function TrackPage() {
       }
     });
     
-    // Highlight elbows (key joints for push-ups)
+    // Draw FACE landmarks (nose and eyes) - CYAN color for visibility
+    const facePoints = [LM.NOSE, LM.LEFT_EYE, LM.RIGHT_EYE];
+    ctx.fillStyle = 'rgba(0, 255, 255, 0.95)'; // Cyan for face
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)';
+    ctx.lineWidth = 2;
+    
+    facePoints.forEach(idx => {
+      const lm = landmarks[idx];
+      if (lm && lm.visibility >= 0.1) {
+        // Draw larger circle for face points
+        ctx.beginPath();
+        ctx.arc(lm.x * ctx.canvas.width, lm.y * ctx.canvas.height, 12, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+      }
+    });
+    
+    // Draw line connecting eyes to show face orientation
+    const leftEye = landmarks[LM.LEFT_EYE];
+    const rightEye = landmarks[LM.RIGHT_EYE];
+    
+    if (leftEye && rightEye && 
+        leftEye.visibility >= 0.1 && 
+        rightEye.visibility >= 0.1) {
+      ctx.beginPath();
+      ctx.strokeStyle = 'rgba(0, 255, 255, 0.6)';
+      ctx.lineWidth = 2;
+      ctx.moveTo(leftEye.x * ctx.canvas.width, leftEye.y * ctx.canvas.height);
+      ctx.lineTo(rightEye.x * ctx.canvas.width, rightEye.y * ctx.canvas.height);
+      ctx.stroke();
+    }
+    
+    // Highlight elbows (key joints for push-ups) - RED
     const elbows = [LM.LEFT_ELBOW, LM.RIGHT_ELBOW];
     ctx.fillStyle = 'rgba(255, 50, 50, 0.9)';
     elbows.forEach(idx => {
@@ -386,7 +617,7 @@ export function TrackPage() {
       }
     });
     
-    // Other key joints
+    // Other key joints - YELLOW
     const keyPoints = [
       LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER,
       LM.LEFT_WRIST, LM.RIGHT_WRIST,
@@ -701,12 +932,55 @@ export function TrackPage() {
                 </div>
                 
                 {isTracking && (
-                  <div className="bg-black/50 backdrop-blur-sm rounded-xl px-4 py-2 text-center">
-                    <div className="text-lg font-semibold text-amber-400">
-                      {currentAngle.toFixed(0)}°
+                  <>
+                    {/* State indicator */}
+                    <div className={`rounded-xl px-4 py-2 text-center backdrop-blur-sm ${
+                      currentState === 'down' ? 'bg-orange-500/30' : 'bg-blue-500/30'
+                    }`}>
+                      <div className={`text-lg font-bold ${
+                        currentState === 'down' ? 'text-orange-300' : 'text-blue-300'
+                      }`}>
+                        {currentState.toUpperCase()}
+                      </div>
                     </div>
-                    <div className="text-zinc-400 text-xs">elbow</div>
-                  </div>
+                    
+                    {/* Elbow angle */}
+                    <div className="bg-black/50 backdrop-blur-sm rounded-xl px-4 py-2 text-center">
+                      <div className="text-lg font-semibold text-amber-400">
+                        {currentAngle.toFixed(0)}°
+                      </div>
+                      <div className="text-zinc-400 text-xs">elbow</div>
+                    </div>
+                    
+                    {/* Face visibility */}
+                    <div className={`rounded-xl px-4 py-2 text-center backdrop-blur-sm ${
+                      faceVisible ? 'bg-cyan-500/30' : 'bg-red-500/30'
+                    }`}>
+                      <div className={`text-xs font-medium ${
+                        faceVisible ? 'text-cyan-300' : 'text-red-400'
+                      }`}>
+                        {faceVisible ? '👁 Face OK' : '❌ No face'}
+                      </div>
+                    </div>
+                    
+                    {/* Face movement */}
+                    <div className={`rounded-xl px-4 py-2 text-center backdrop-blur-sm ${
+                      faceValid ? 'bg-emerald-500/30' : 'bg-black/50'
+                    }`}>
+                      <div className={`text-sm font-semibold ${
+                        Math.abs(faceMovement) > CONFIG.FACE_MOVE_THRESHOLD 
+                          ? 'text-emerald-300' 
+                          : 'text-zinc-500'
+                      }`}>
+                        {(faceMovement * 100).toFixed(1)}%
+                      </div>
+                      <div className={`text-xs ${
+                        faceValid ? 'text-emerald-300' : 'text-zinc-500'
+                      }`}>
+                        {faceValid ? '↕ Moving' : '— Still'}
+                      </div>
+                    </div>
+                  </>
                 )}
                 
                 <div className={`rounded-lg px-3 py-1.5 backdrop-blur-sm ${
