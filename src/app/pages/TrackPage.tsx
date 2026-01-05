@@ -21,6 +21,7 @@ const CONFIG = {
   
   // Timing
   MIN_REP_TIME_MS: 300,       // Minimum time for valid rep (debounce)
+  FACE_LOST_PAUSE_MS: 2000,   // Auto-pause after face lost for this duration
   
   // Visibility - RELAXED for body landmarks
   MIN_VISIBILITY: 0.2,        // Accept lower visibility for arms
@@ -378,6 +379,7 @@ export function TrackPage() {
   const isTrackingRef = useRef(false);
   const isPausedRef = useRef(false);
   const lastAnnouncedCountRef = useRef(0);
+  const faceLostTimeRef = useRef<number | null>(null); // Track when face was lost for auto-pause
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -474,8 +476,24 @@ export function TrackPage() {
       setFaceMovement(result.faceMovement);
       setCurrentState(result.state);
       
+      // Reset face lost timer when face is visible
+      if (result.faceVisible) {
+        faceLostTimeRef.current = null;
+      }
+      
       if (isTrackingRef.current) {
         setFeedback(result.feedback);
+        
+        // Auto-pause if face lost for too long
+        if (!result.faceVisible) {
+          if (faceLostTimeRef.current === null) {
+            faceLostTimeRef.current = Date.now();
+          } else if (Date.now() - faceLostTimeRef.current > CONFIG.FACE_LOST_PAUSE_MS) {
+            setFeedback('Face lost - paused');
+            setIsPaused(true);
+            voiceAgent.announceSessionPause();
+          }
+        }
         
         // Announce new reps via voice agent
         if (result.count > lastAnnouncedCountRef.current) {
@@ -489,6 +507,17 @@ export function TrackPage() {
       setFaceValid(false);
       setFaceVisible(false);
       setFaceMovement(0);
+      
+      // Auto-pause if pose lost for too long during tracking
+      if (isTrackingRef.current) {
+        if (faceLostTimeRef.current === null) {
+          faceLostTimeRef.current = Date.now();
+        } else if (Date.now() - faceLostTimeRef.current > CONFIG.FACE_LOST_PAUSE_MS) {
+          setFeedback('Pose lost - paused');
+          setIsPaused(true);
+          voiceAgent.announceSessionPause();
+        }
+      }
     }
   };
   
@@ -532,7 +561,18 @@ export function TrackPage() {
     render();
   };
   
+  // Optimized skeleton drawing - single save/restore, responsive point sizes
   const drawSkeleton = (ctx: CanvasRenderingContext2D, landmarks: any[]) => {
+    const w = ctx.canvas.width;
+    const h = ctx.canvas.height;
+    
+    // Responsive point sizes based on canvas size (works better on mobile)
+    const baseSize = Math.min(w, h) / 100;
+    const facePointSize = Math.max(baseSize * 1.5, 6);   // Was fixed 12px
+    const elbowPointSize = Math.max(baseSize * 1.2, 5);  // Was fixed 8px
+    const jointPointSize = Math.max(baseSize, 4);         // Was fixed 6px
+    const lineWidth = Math.max(baseSize * 0.4, 2);
+    
     const connections = [
       // Arms (important for push-ups)
       [LM.LEFT_SHOULDER, LM.LEFT_ELBOW],
@@ -551,15 +591,17 @@ export function TrackPage() {
       [LM.RIGHT_KNEE, LM.RIGHT_ANKLE],
     ];
     
+    // Single save at start
     ctx.save();
+    
     if (facingMode === 'user') {
       ctx.scale(-1, 1);
-      ctx.translate(-ctx.canvas.width, 0);
+      ctx.translate(-w, 0);
     }
     
-    // Draw lines
+    // Draw skeleton lines
     ctx.strokeStyle = 'rgba(0, 255, 100, 0.8)';
-    ctx.lineWidth = 3;
+    ctx.lineWidth = lineWidth;
     ctx.lineCap = 'round';
     
     connections.forEach(([a, b]) => {
@@ -567,30 +609,29 @@ export function TrackPage() {
       const lmB = landmarks[b];
       if (isVisible(lmA) && isVisible(lmB)) {
         ctx.beginPath();
-        ctx.moveTo(lmA.x * ctx.canvas.width, lmA.y * ctx.canvas.height);
-        ctx.lineTo(lmB.x * ctx.canvas.width, lmB.y * ctx.canvas.height);
+        ctx.moveTo(lmA.x * w, lmA.y * h);
+        ctx.lineTo(lmB.x * w, lmB.y * h);
         ctx.stroke();
       }
     });
     
-    // Draw FACE landmarks (nose and eyes) - CYAN color for visibility
+    // Draw FACE landmarks (nose and eyes) - CYAN
     const facePoints = [LM.NOSE, LM.LEFT_EYE, LM.RIGHT_EYE];
-    ctx.fillStyle = 'rgba(0, 255, 255, 0.95)'; // Cyan for face
+    ctx.fillStyle = 'rgba(0, 255, 255, 0.95)';
     ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)';
     ctx.lineWidth = 2;
     
     facePoints.forEach(idx => {
       const lm = landmarks[idx];
       if (lm && lm.visibility >= 0.1) {
-        // Draw larger circle for face points
         ctx.beginPath();
-        ctx.arc(lm.x * ctx.canvas.width, lm.y * ctx.canvas.height, 12, 0, 2 * Math.PI);
+        ctx.arc(lm.x * w, lm.y * h, facePointSize, 0, 2 * Math.PI);
         ctx.fill();
         ctx.stroke();
       }
     });
     
-    // Draw line connecting eyes to show face orientation
+    // Draw line connecting eyes
     const leftEye = landmarks[LM.LEFT_EYE];
     const rightEye = landmarks[LM.RIGHT_EYE];
     
@@ -600,40 +641,34 @@ export function TrackPage() {
       ctx.beginPath();
       ctx.strokeStyle = 'rgba(0, 255, 255, 0.6)';
       ctx.lineWidth = 2;
-      ctx.moveTo(leftEye.x * ctx.canvas.width, leftEye.y * ctx.canvas.height);
-      ctx.lineTo(rightEye.x * ctx.canvas.width, rightEye.y * ctx.canvas.height);
+      ctx.moveTo(leftEye.x * w, leftEye.y * h);
+      ctx.lineTo(rightEye.x * w, rightEye.y * h);
       ctx.stroke();
     }
     
     // Highlight elbows (key joints for push-ups) - RED
-    const elbows = [LM.LEFT_ELBOW, LM.RIGHT_ELBOW];
     ctx.fillStyle = 'rgba(255, 50, 50, 0.9)';
-    elbows.forEach(idx => {
+    [LM.LEFT_ELBOW, LM.RIGHT_ELBOW].forEach(idx => {
       const lm = landmarks[idx];
       if (isVisible(lm)) {
         ctx.beginPath();
-        ctx.arc(lm.x * ctx.canvas.width, lm.y * ctx.canvas.height, 8, 0, 2 * Math.PI);
+        ctx.arc(lm.x * w, lm.y * h, elbowPointSize, 0, 2 * Math.PI);
         ctx.fill();
       }
     });
     
     // Other key joints - YELLOW
-    const keyPoints = [
-      LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER,
-      LM.LEFT_WRIST, LM.RIGHT_WRIST,
-      LM.LEFT_HIP, LM.RIGHT_HIP,
-    ];
-    
     ctx.fillStyle = 'rgba(255, 255, 0, 0.9)';
-    keyPoints.forEach(idx => {
+    [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER, LM.LEFT_WRIST, LM.RIGHT_WRIST, LM.LEFT_HIP, LM.RIGHT_HIP].forEach(idx => {
       const lm = landmarks[idx];
       if (isVisible(lm)) {
         ctx.beginPath();
-        ctx.arc(lm.x * ctx.canvas.width, lm.y * ctx.canvas.height, 6, 0, 2 * Math.PI);
+        ctx.arc(lm.x * w, lm.y * h, jointPointSize, 0, 2 * Math.PI);
         ctx.fill();
       }
     });
     
+    // Single restore at end
     ctx.restore();
   };
   
@@ -689,6 +724,7 @@ export function TrackPage() {
   const startTracking = () => {
     detectorRef.current.reset();
     lastAnnouncedCountRef.current = 0;
+    faceLostTimeRef.current = null;
     setCount(0);
     setDuration(0);
     setIsTracking(true);
@@ -701,6 +737,7 @@ export function TrackPage() {
   
   const togglePause = () => {
     if (isPaused) {
+      faceLostTimeRef.current = null; // Reset face lost timer on resume
       setIsPaused(false);
       voiceAgent.announceSessionResume();
     } else {
@@ -720,6 +757,7 @@ export function TrackPage() {
   const resetSession = () => {
     detectorRef.current.reset();
     lastAnnouncedCountRef.current = 0;
+    faceLostTimeRef.current = null;
     setCount(0);
     setDuration(0);
     setIsTracking(false);
