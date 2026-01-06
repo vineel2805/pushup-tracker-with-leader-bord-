@@ -256,33 +256,40 @@ export const onAuthStateChange = (callback: (user: User | null) => void) => {
  * Check if running on mobile device
  */
 const isMobileDevice = (): boolean => {
+  if (typeof window === 'undefined') return false;
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 };
 
 /**
  * Sign in with Google
  * Uses redirect on mobile for better UX, popup on desktop
- * Handles email collisions and account linking
  */
-export const signInWithGoogle = async (): Promise<AuthUser> => {
+export const signInWithGoogle = async (): Promise<AuthUser | null> => {
   const provider = new GoogleAuthProvider();
+  provider.addScope('email');
+  provider.addScope('profile');
   provider.setCustomParameters({
     prompt: 'select_account'
   });
 
   try {
-    // Use redirect on mobile devices for better compatibility
-    if (isMobileDevice()) {
-      // Store flag to check redirect result on page load
-      sessionStorage.setItem('googleSignInPending', 'true');
+    const isMobile = isMobileDevice();
+    console.log('[Auth] Google Sign-In initiated, isMobile:', isMobile);
+
+    if (isMobile) {
+      // Use redirect on mobile devices for better compatibility
+      console.log('[Auth] Using redirect flow for mobile');
       await signInWithRedirect(auth, provider);
       // This won't execute as the page will redirect
-      throw new Error('Redirecting to Google...');
+      return null;
     }
 
     // Use popup on desktop
+    console.log('[Auth] Using popup flow for desktop');
     const userCredential = await signInWithPopup(auth, provider);
     const user = userCredential.user;
+
+    console.log('[Auth] Popup sign-in successful:', user.email);
 
     return {
       uid: user.uid,
@@ -292,13 +299,7 @@ export const signInWithGoogle = async (): Promise<AuthUser> => {
       emailVerified: user.emailVerified,
     };
   } catch (error: any) {
-    // Clear pending flag on error
-    sessionStorage.removeItem('googleSignInPending');
-    
-    // Handle redirecting message
-    if (error.message === 'Redirecting to Google...') {
-      throw error;
-    }
+    console.error('[Auth] Google Sign-In error:', error.code, error.message);
 
     // Handle account exists with different credential
     if (error.code === 'auth/account-exists-with-different-credential') {
@@ -364,16 +365,13 @@ export const signInWithGoogle = async (): Promise<AuthUser> => {
  */
 export const handleGoogleRedirectResult = async (): Promise<AuthUser | null> => {
   try {
-    const isPending = sessionStorage.getItem('googleSignInPending');
-    if (!isPending) {
-      return null;
-    }
-
-    sessionStorage.removeItem('googleSignInPending');
+    console.log('[Auth] Checking for redirect result...');
     
     const result = await getRedirectResult(auth);
     
     if (result && result.user) {
+      console.log('[Auth] Redirect result found:', result.user.email);
+      
       return {
         uid: result.user.uid,
         email: result.user.email,
@@ -383,9 +381,10 @@ export const handleGoogleRedirectResult = async (): Promise<AuthUser | null> => 
       };
     }
     
+    console.log('[Auth] No redirect result found');
     return null;
   } catch (error: any) {
-    sessionStorage.removeItem('googleSignInPending');
+    console.error('[Auth] Redirect result error:', error.code, error.message);
     
     // Handle specific redirect errors
     if (error.code === 'auth/account-exists-with-different-credential') {
@@ -397,6 +396,14 @@ export const handleGoogleRedirectResult = async (): Promise<AuthUser | null> => 
 
     if (error.code === 'auth/credential-already-in-use') {
       throw new Error('This Google account is already linked to another user.');
+    }
+
+    if (error.code === 'auth/network-request-failed') {
+      throw new Error('Network error. Please check your internet connection and try again.');
+    }
+
+    if (error.code === 'auth/internal-error') {
+      throw new Error('An internal error occurred. Please try again.');
     }
 
     throwAuthError(error);
