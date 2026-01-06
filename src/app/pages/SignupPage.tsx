@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Activity, AlertCircle, Loader2 } from 'lucide-react';
-import { signUp, signInWithGoogle, validatePasswordStrength } from '../services/authService';
+import { signUp, signInWithGoogle, validatePasswordStrength, isRedirectInProgress } from '../services/authService';
 import { createUserProfile, checkUsernameExists } from '../services/firestoreService';
 import { useAuth } from '../context/AuthContext';
 import { getAuthErrorMessage } from '../utils/authErrors';
@@ -17,24 +17,47 @@ export function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [checkingUsername, setCheckingUsername] = useState(false);
+  const [processingRedirect, setProcessingRedirect] = useState(false);
   const navigate = useNavigate();
   const { currentUser, userProfile, loading: authLoading, redirectLoading, redirectError, clearRedirectError } = useAuth();
+
+  // Check for redirect state on mount
+  useEffect(() => {
+    if (isRedirectInProgress()) {
+      console.log('[SignupPage] 🔄 Processing Google redirect...');
+      setProcessingRedirect(true);
+    }
+  }, []);
 
   // Handle redirect error from context
   useEffect(() => {
     if (redirectError) {
       setError(redirectError);
       clearRedirectError();
+      setProcessingRedirect(false);
     }
   }, [redirectError, clearRedirectError]);
 
   // Redirect if already logged in
   useEffect(() => {
+    console.log('[SignupPage] Auth state:', { 
+      currentUser: !!currentUser, 
+      userProfile: !!userProfile, 
+      authLoading,
+      redirectLoading,
+      processingRedirect 
+    });
+    
     if (!authLoading && !redirectLoading && currentUser && userProfile) {
-      console.log('[SignupPage] User already logged in, redirecting to dashboard');
+      console.log('[SignupPage] ✅ User authenticated with profile, redirecting to dashboard');
+      setProcessingRedirect(false);
       navigate('/dashboard', { replace: true });
+    } else if (!authLoading && !redirectLoading && !currentUser && processingRedirect) {
+      // Redirect completed but no user - something went wrong
+      console.log('[SignupPage] ⚠️ Redirect completed but no user');
+      setProcessingRedirect(false);
     }
-  }, [currentUser, userProfile, authLoading, redirectLoading, navigate]);
+  }, [currentUser, userProfile, authLoading, redirectLoading, navigate, processingRedirect]);
 
   const handleUsernameBlur = async () => {
     if (!username.trim()) {
@@ -139,20 +162,19 @@ export function SignupPage() {
       const result = await signInWithGoogle();
       // If result is null, we're redirecting (mobile flow)
       if (result) {
-        // Popup flow completed successfully, navigate to dashboard
-        console.log('[SignupPage] Google popup sign-in successful');
-        navigate('/dashboard');
+        // Popup flow completed successfully - auth state will update and useEffect will navigate
+        console.log('[SignupPage] ✅ Google popup sign-in successful');
       }
-      // If null, the page is redirecting to Google
+      // If null, the page is redirecting to Google - don't do anything
     } catch (err: any) {
-      console.error('[SignupPage] Google sign-in error:', err);
+      console.error('[SignupPage] ❌ Google sign-in error:', err);
       setError(err.message || 'Failed to sign in with Google');
       setGoogleLoading(false);
     }
   };
 
-  // Show loading state while checking auth/redirect
-  if (redirectLoading || (authLoading && !error)) {
+  // Show loading state while checking auth/redirect or processing redirect
+  if (processingRedirect || redirectLoading || (authLoading && !error)) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">

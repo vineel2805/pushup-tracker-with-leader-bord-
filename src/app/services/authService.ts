@@ -36,9 +36,61 @@ export interface AuthUser {
   emailVerified?: boolean;
 }
 
+// Session storage keys for redirect flow
+const REDIRECT_IN_PROGRESS_KEY = 'google_auth_redirect_in_progress';
+const REDIRECT_TIMESTAMP_KEY = 'google_auth_redirect_timestamp';
+const REDIRECT_TIMEOUT_MS = 120000; // 2 minutes timeout for redirect
+
 // Rate limiting for password changes (client-side cooldown)
 let lastPasswordChangeTime: number = 0;
 const PASSWORD_CHANGE_COOLDOWN_MS = 60000; // 1 minute
+
+/**
+ * Check if a redirect sign-in is in progress
+ */
+export const isRedirectInProgress = (): boolean => {
+  try {
+    const inProgress = sessionStorage.getItem(REDIRECT_IN_PROGRESS_KEY);
+    const timestamp = sessionStorage.getItem(REDIRECT_TIMESTAMP_KEY);
+    
+    if (!inProgress || !timestamp) return false;
+    
+    // Check if redirect has timed out
+    const elapsed = Date.now() - parseInt(timestamp, 10);
+    if (elapsed > REDIRECT_TIMEOUT_MS) {
+      clearRedirectState();
+      return false;
+    }
+    
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Clear redirect state from session storage
+ */
+export const clearRedirectState = (): void => {
+  try {
+    sessionStorage.removeItem(REDIRECT_IN_PROGRESS_KEY);
+    sessionStorage.removeItem(REDIRECT_TIMESTAMP_KEY);
+  } catch {
+    // Ignore storage errors
+  }
+};
+
+/**
+ * Set redirect in progress flag
+ */
+const setRedirectInProgress = (): void => {
+  try {
+    sessionStorage.setItem(REDIRECT_IN_PROGRESS_KEY, 'true');
+    sessionStorage.setItem(REDIRECT_TIMESTAMP_KEY, Date.now().toString());
+  } catch {
+    // Ignore storage errors
+  }
+};
 
 /**
  * Validates password strength
@@ -279,6 +331,10 @@ export const signInWithGoogle = async (): Promise<AuthUser | null> => {
     if (isMobile) {
       // Use redirect on mobile devices for better compatibility
       console.log('[Auth] Using redirect flow for mobile');
+      
+      // Mark redirect in progress BEFORE redirecting
+      setRedirectInProgress();
+      
       await signInWithRedirect(auth, provider);
       // This won't execute as the page will redirect
       return null;
@@ -365,12 +421,16 @@ export const signInWithGoogle = async (): Promise<AuthUser | null> => {
  */
 export const handleGoogleRedirectResult = async (): Promise<AuthUser | null> => {
   try {
-    console.log('[Auth] Checking for redirect result...');
+    const wasRedirecting = isRedirectInProgress();
+    console.log('[Auth] Checking for redirect result, wasRedirecting:', wasRedirecting);
     
     const result = await getRedirectResult(auth);
     
+    // Clear redirect state after getting result
+    clearRedirectState();
+    
     if (result && result.user) {
-      console.log('[Auth] Redirect result found:', result.user.email);
+      console.log('[Auth] ✅ Redirect result found:', result.user.email);
       
       return {
         uid: result.user.uid,
@@ -381,10 +441,18 @@ export const handleGoogleRedirectResult = async (): Promise<AuthUser | null> => 
       };
     }
     
+    // If we were redirecting but got no result, log warning
+    if (wasRedirecting) {
+      console.warn('[Auth] ⚠️ Redirect was in progress but no result found');
+    }
+    
     console.log('[Auth] No redirect result found');
     return null;
   } catch (error: any) {
-    console.error('[Auth] Redirect result error:', error.code, error.message);
+    console.error('[Auth] ❌ Redirect result error:', error.code, error.message);
+    
+    // Clear redirect state on error
+    clearRedirectState();
     
     // Handle specific redirect errors
     if (error.code === 'auth/account-exists-with-different-credential') {

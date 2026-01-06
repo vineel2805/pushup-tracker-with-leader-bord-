@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useRef, useCallback } from 'react';
 import { User as FirebaseUser } from 'firebase/auth';
-import { onAuthStateChange, handleGoogleRedirectResult } from '../services/authService';
-import { getUserProfile, createUserProfile, User } from '../services/firestoreService';
+import { onAuthStateChange, handleGoogleRedirectResult, isRedirectInProgress } from '../services/authService';
+import { getUserProfile, createUserProfile, checkUsernameExists, User } from '../services/firestoreService';
 
 interface AuthContextType {
   currentUser: FirebaseUser | null;
@@ -50,7 +50,29 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         
         // Create profile if it doesn't exist (only for new users)
         if (!profile && userToCheck.email) {
-          const username = userToCheck.displayName || userToCheck.email.split('@')[0];
+          let username = userToCheck.displayName || userToCheck.email.split('@')[0];
+          // Clean username - remove special characters and spaces
+          username = username.replace(/[^a-zA-Z0-9_]/g, '').substring(0, 20);
+          
+          if (!username) {
+            username = 'user';
+          }
+          
+          // Handle username collision
+          try {
+            let attempts = 0;
+            const baseUsername = username;
+            
+            while (await checkUsernameExists(username) && attempts < 10) {
+              username = `${baseUsername}${Math.floor(Math.random() * 10000)}`;
+              attempts++;
+              console.log('[AuthContext] Username collision, trying:', username);
+            }
+          } catch (usernameCheckError) {
+            console.error('[AuthContext] Error checking username:', usernameCheckError);
+            username = `${username}${Date.now().toString().slice(-6)}`;
+          }
+          
           await createUserProfile(userToCheck.uid, {
             username: username,
             email: userToCheck.email,
@@ -146,7 +168,30 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           // Create profile if it doesn't exist (for Google sign-in users)
           if (!profile && user.email) {
             console.log('[AuthContext] Creating new profile for:', user.email);
-            const username = user.displayName || user.email.split('@')[0];
+            
+            let username = user.displayName || user.email.split('@')[0];
+            // Clean username - remove special characters and spaces
+            username = username.replace(/[^a-zA-Z0-9_]/g, '').substring(0, 20);
+            
+            if (!username) {
+              username = 'user';
+            }
+            
+            // Handle username collision
+            try {
+              let attempts = 0;
+              const baseUsername = username;
+              
+              while (await checkUsernameExists(username) && attempts < 10) {
+                username = `${baseUsername}${Math.floor(Math.random() * 10000)}`;
+                attempts++;
+                console.log('[AuthContext] Username collision, trying:', username);
+              }
+            } catch (usernameCheckError) {
+              console.error('[AuthContext] Error checking username:', usernameCheckError);
+              username = `${username}${Date.now().toString().slice(-6)}`;
+            }
+            
             await createUserProfile(user.uid, {
               username: username,
               email: user.email,
@@ -161,7 +206,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             if (currentOperationId !== authOperationId || !isMountedRef.current) return;
             
             profile = await getUserProfile(user.uid);
-            console.log('[AuthContext] Profile created successfully');
+            console.log('[AuthContext] ✅ Profile created successfully:', profile?.username);
           }
           
           // Final check before setting state
