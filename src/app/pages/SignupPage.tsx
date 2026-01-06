@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Activity, AlertCircle, Loader2 } from 'lucide-react';
+import { Activity, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 import { signUp, signInWithGoogle, validatePasswordStrength, isRedirectInProgress } from '../services/authService';
 import { createUserProfile, checkUsernameExists } from '../services/firestoreService';
 import { useAuth } from '../context/AuthContext';
@@ -18,6 +18,7 @@ export function SignupPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [processingRedirect, setProcessingRedirect] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
   const { currentUser, userProfile, loading: authLoading, redirectLoading, redirectError, clearRedirectError } = useAuth();
 
@@ -260,20 +261,31 @@ export function SignupPage() {
             <label htmlFor="password" className="block text-zinc-400 text-sm mb-2">
               Password
             </label>
-            <input
-              type="password"
-              id="password"
-              value={password}
-              onChange={(e) => handlePasswordChange(e.target.value)}
-              className={`w-full px-4 py-3 bg-zinc-900/80 border rounded-lg text-white focus:outline-none transition-colors text-base ${
-                passwordError
-                  ? 'border-red-500 focus:border-red-500'
-                  : 'border-zinc-800/60 focus:border-emerald-500'
-              }`}
-              placeholder="••••••••"
-              required
-              disabled={loading || googleLoading}
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                id="password"
+                value={password}
+                onChange={(e) => handlePasswordChange(e.target.value)}
+                className={`w-full px-4 py-3 pr-12 bg-zinc-900/80 border rounded-lg text-white focus:outline-none transition-colors text-base ${
+                  passwordError
+                    ? 'border-red-500 focus:border-red-500'
+                    : 'border-zinc-800/60 focus:border-emerald-500'
+                }`}
+                placeholder="••••••••"
+                required
+                disabled={loading || googleLoading}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-300 transition-colors"
+                tabIndex={-1}
+                disabled={loading || googleLoading}
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
             {passwordError ? (
               <p className="text-xs text-red-500 mt-1">{passwordError}</p>
             ) : (
