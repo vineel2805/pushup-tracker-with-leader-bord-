@@ -10,6 +10,8 @@ import {
   EmailAuthProvider,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   sendPasswordResetEmail,
   sendEmailVerification,
   linkWithCredential,
@@ -251,43 +253,152 @@ export const onAuthStateChange = (callback: (user: User | null) => void) => {
 };
 
 /**
+ * Check if running on mobile device
+ */
+const isMobileDevice = (): boolean => {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+};
+
+/**
  * Sign in with Google
+ * Uses redirect on mobile for better UX, popup on desktop
  * Handles email collisions and account linking
  */
 export const signInWithGoogle = async (): Promise<AuthUser> => {
-  try {
-    const provider = new GoogleAuthProvider();
-    
-    try {
-      const userCredential = await signInWithPopup(auth, provider);
-      const user = userCredential.user;
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({
+    prompt: 'select_account'
+  });
 
-      return {
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName,
-        photoURL: user.photoURL,
-        emailVerified: user.emailVerified,
-      };
-    } catch (error: any) {
-      // Handle account exists with different credential
-      if (error.code === 'auth/account-exists-with-different-credential') {
-        const email = error.customData?.email;
-        if (email) {
-          // Check what sign-in methods are available
-          const methods = await fetchSignInMethodsForEmail(auth, email);
-          throw new Error(
-            `An account with email ${email} already exists. Please sign in with ${methods[0] === 'password' ? 'email/password' : methods[0]} first, then you can link your Google account in settings.`
-          );
-        }
-      }
-      throwAuthError(error);
+  try {
+    // Use redirect on mobile devices for better compatibility
+    if (isMobileDevice()) {
+      // Store flag to check redirect result on page load
+      sessionStorage.setItem('googleSignInPending', 'true');
+      await signInWithRedirect(auth, provider);
+      // This won't execute as the page will redirect
+      throw new Error('Redirecting to Google...');
     }
+
+    // Use popup on desktop
+    const userCredential = await signInWithPopup(auth, provider);
+    const user = userCredential.user;
+
+    return {
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName,
+      photoURL: user.photoURL,
+      emailVerified: user.emailVerified,
+    };
   } catch (error: any) {
-    // Re-throw custom errors as-is
-    if (error.message.includes('already exists')) {
+    // Clear pending flag on error
+    sessionStorage.removeItem('googleSignInPending');
+    
+    // Handle redirecting message
+    if (error.message === 'Redirecting to Google...') {
       throw error;
     }
+
+    // Handle account exists with different credential
+    if (error.code === 'auth/account-exists-with-different-credential') {
+      const email = error.customData?.email;
+      if (email) {
+        try {
+          const methods = await fetchSignInMethodsForEmail(auth, email);
+          const methodName = methods[0] === 'password' ? 'email and password' : methods[0];
+          throw new Error(
+            `An account already exists with ${email}. Please sign in with ${methodName} first, then link your Google account in Settings.`
+          );
+        } catch (fetchError: any) {
+          if (fetchError.message.includes('An account already exists')) {
+            throw fetchError;
+          }
+          throw new Error(`An account already exists with this email. Please try a different sign-in method.`);
+        }
+      }
+    }
+
+    // Handle popup closed
+    if (error.code === 'auth/popup-closed-by-user') {
+      throw new Error('Sign-in was cancelled. Please try again.');
+    }
+
+    // Handle popup blocked
+    if (error.code === 'auth/popup-blocked') {
+      throw new Error('Pop-up was blocked by your browser. Please allow pop-ups for this site and try again.');
+    }
+
+    // Handle network errors
+    if (error.code === 'auth/network-request-failed') {
+      throw new Error('Network error. Please check your internet connection and try again.');
+    }
+
+    // Handle cancelled popup request
+    if (error.code === 'auth/cancelled-popup-request') {
+      throw new Error('Sign-in was cancelled. Please try again.');
+    }
+
+    // Handle unauthorized domain
+    if (error.code === 'auth/unauthorized-domain') {
+      throw new Error('This domain is not authorized for Google Sign-In. Please contact support.');
+    }
+
+    // Handle operation not allowed
+    if (error.code === 'auth/operation-not-allowed') {
+      throw new Error('Google Sign-In is not enabled. Please contact support.');
+    }
+
+    // Handle internal error
+    if (error.code === 'auth/internal-error') {
+      throw new Error('An internal error occurred. Please try again later.');
+    }
+
+    throwAuthError(error);
+  }
+};
+
+/**
+ * Handle Google redirect result
+ * Call this on app initialization to handle redirect results
+ */
+export const handleGoogleRedirectResult = async (): Promise<AuthUser | null> => {
+  try {
+    const isPending = sessionStorage.getItem('googleSignInPending');
+    if (!isPending) {
+      return null;
+    }
+
+    sessionStorage.removeItem('googleSignInPending');
+    
+    const result = await getRedirectResult(auth);
+    
+    if (result && result.user) {
+      return {
+        uid: result.user.uid,
+        email: result.user.email,
+        displayName: result.user.displayName,
+        photoURL: result.user.photoURL,
+        emailVerified: result.user.emailVerified,
+      };
+    }
+    
+    return null;
+  } catch (error: any) {
+    sessionStorage.removeItem('googleSignInPending');
+    
+    // Handle specific redirect errors
+    if (error.code === 'auth/account-exists-with-different-credential') {
+      const email = error.customData?.email;
+      throw new Error(
+        `An account already exists with ${email || 'this email'}. Please sign in with your original method.`
+      );
+    }
+
+    if (error.code === 'auth/credential-already-in-use') {
+      throw new Error('This Google account is already linked to another user.');
+    }
+
     throwAuthError(error);
   }
 };

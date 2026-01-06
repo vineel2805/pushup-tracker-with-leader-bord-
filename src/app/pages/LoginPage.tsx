@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Activity } from 'lucide-react';
-import { logIn, signInWithGoogle } from '../services/authService';
+import { Activity, AlertCircle, Loader2 } from 'lucide-react';
+import { logIn, signInWithGoogle, handleGoogleRedirectResult } from '../services/authService';
 import { useAuth } from '../context/AuthContext';
 import { getAuthErrorMessage } from '../utils/authErrors';
 
@@ -11,8 +11,29 @@ export function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [checkingRedirect, setCheckingRedirect] = useState(true);
   const navigate = useNavigate();
   const { refreshUserProfile } = useAuth();
+
+  // Check for Google redirect result on mount
+  useEffect(() => {
+    const checkRedirectResult = async () => {
+      try {
+        const result = await handleGoogleRedirectResult();
+        if (result) {
+          await refreshUserProfile();
+          navigate('/dashboard');
+        }
+      } catch (err: any) {
+        setError(err.message || 'Failed to complete Google sign-in');
+      } finally {
+        setCheckingRedirect(false);
+      }
+    };
+
+    checkRedirectResult();
+  }, [navigate, refreshUserProfile]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,20 +59,36 @@ export function LoginPage() {
 
   const handleGoogleSignIn = async () => {
     setError('');
-    setLoading(true);
+    setGoogleLoading(true);
 
     try {
-      await signInWithGoogle();
-      await refreshUserProfile();
-      
-      // Check if email is verified (Google accounts are auto-verified)
-      navigate('/dashboard');
+      const result = await signInWithGoogle();
+      // If we get here, it was a popup flow (desktop)
+      if (result) {
+        await refreshUserProfile();
+        navigate('/dashboard');
+      }
     } catch (err: any) {
-      setError(getAuthErrorMessage(err));
+      // Don't show error if redirecting
+      if (err.message !== 'Redirecting to Google...') {
+        setError(err.message || 'Failed to sign in with Google');
+      }
     } finally {
-      setLoading(false);
+      setGoogleLoading(false);
     }
   };
+
+  // Show loading state while checking redirect
+  if (checkingRedirect) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+          <p className="text-zinc-400 text-sm">Checking sign-in status...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-black flex items-center justify-center px-4 lg:px-6 py-8">
@@ -65,8 +102,9 @@ export function LoginPage() {
         <h1 className="text-2xl lg:text-3xl text-white text-center mb-6 lg:mb-8">Welcome Back</h1>
 
         {error && (
-          <div className="mb-4 p-4 bg-red-500/10 border border-red-500/50 rounded-lg text-red-500 text-sm">
-            {error}
+          <div className="mb-4 p-4 bg-red-500/10 border border-red-500/50 rounded-lg flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <p className="text-red-500 text-sm">{error}</p>
           </div>
         )}
 
@@ -83,7 +121,7 @@ export function LoginPage() {
               className="w-full px-4 py-3 lg:py-3 bg-zinc-900/80 border border-zinc-800/60 rounded-lg text-white focus:outline-none focus:border-emerald-500 transition-colors text-base"
               placeholder="you@example.com"
               required
-              disabled={loading}
+              disabled={loading || googleLoading}
             />
           </div>
 
@@ -99,7 +137,7 @@ export function LoginPage() {
               className="w-full px-4 py-3 lg:py-3 bg-zinc-900/80 border border-zinc-800/60 rounded-lg text-white focus:outline-none focus:border-emerald-500 transition-colors text-base"
               placeholder="••••••••"
               required
-              disabled={loading}
+              disabled={loading || googleLoading}
             />
           </div>
 
@@ -110,7 +148,7 @@ export function LoginPage() {
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
                 className="w-4 h-4 bg-zinc-900 border-zinc-800 rounded"
-                disabled={loading}
+                disabled={loading || googleLoading}
               />
               <span className="text-sm">Remember me</span>
             </label>
@@ -124,10 +162,17 @@ export function LoginPage() {
 
           <button
             type="submit"
-            disabled={loading}
-            className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={loading || googleLoading}
+            className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            {loading ? 'Logging in...' : 'Log In'}
+            {loading ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Logging in...
+              </>
+            ) : (
+              'Log In'
+            )}
           </button>
         </form>
 
@@ -142,9 +187,16 @@ export function LoginPage() {
 
         <button
           onClick={handleGoogleSignIn}
-          disabled={loading}
+          disabled={loading || googleLoading}
           className="w-full py-3 bg-white hover:bg-zinc-100 text-zinc-900 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 font-medium"
         >
+          {googleLoading ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Signing in...
+            </>
+          ) : (
+            <>
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path
               fill="#4285F4"
@@ -164,6 +216,8 @@ export function LoginPage() {
             />
           </svg>
           Continue with Google
+            </>
+          )}
         </button>
 
         <p className="text-center text-zinc-400 mt-6">
