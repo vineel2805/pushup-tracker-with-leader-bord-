@@ -1,14 +1,14 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useRef, useCallback } from 'react';
 import { User as FirebaseUser } from 'firebase/auth';
-import { onAuthStateChange, handleGoogleRedirectResult, isRedirectInProgress } from '../services/authService';
+import { onAuthStateChange } from '../services/authService';
 import { getUserProfile, createUserProfile, checkUsernameExists, User } from '../services/firestoreService';
 
 interface AuthContextType {
   currentUser: FirebaseUser | null;
   userProfile: User | null;
   loading: boolean;
-  redirectLoading: boolean;
-  redirectError: string | null;
+  redirectLoading: boolean; // Keep for backwards compatibility
+  redirectError: string | null; // Keep for backwards compatibility
   refreshUserProfile: () => Promise<void>;
   clearRedirectError: () => void;
 }
@@ -31,15 +31,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [redirectLoading, setRedirectLoading] = useState(true);
-  const [redirectError, setRedirectError] = useState<string | null>(null);
+  // No longer using redirect flow, but keep for API compatibility
+  const [redirectLoading] = useState(false);
+  const [redirectError] = useState<string | null>(null);
   
   const isMountedRef = useRef(true);
   const currentUserRef = useRef<FirebaseUser | null>(null);
-  const redirectHandledRef = useRef(false);
 
   const clearRedirectError = useCallback(() => {
-    setRedirectError(null);
+    // No-op since we don't use redirect flow anymore
   }, []);
 
   const refreshUserProfile = useCallback(async (user?: FirebaseUser) => {
@@ -101,40 +101,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   }, []);
 
-  // Handle Google redirect result on app initialization
-  useEffect(() => {
-    const handleRedirect = async () => {
-      if (redirectHandledRef.current) {
-        setRedirectLoading(false);
-        return;
-      }
-      
-      redirectHandledRef.current = true;
-      
-      try {
-        console.log('[AuthContext] Checking for Google redirect result...');
-        const result = await handleGoogleRedirectResult();
-        
-        if (result) {
-          console.log('[AuthContext] Google redirect successful:', result.email);
-          // The onAuthStateChange will handle setting the user
-        } else {
-          console.log('[AuthContext] No pending Google redirect');
-        }
-      } catch (error: any) {
-        console.error('[AuthContext] Google redirect error:', error);
-        if (isMountedRef.current) {
-          setRedirectError(error.message || 'Failed to complete Google sign-in');
-        }
-      } finally {
-        if (isMountedRef.current) {
-          setRedirectLoading(false);
-        }
-      }
-    };
-
-    handleRedirect();
-  }, []);
+  // No longer using redirect flow - popup works better on all devices
 
   useEffect(() => {
     isMountedRef.current = true;

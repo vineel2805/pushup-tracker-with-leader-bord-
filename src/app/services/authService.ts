@@ -305,16 +305,37 @@ export const onAuthStateChange = (callback: (user: User | null) => void) => {
 };
 
 /**
- * Check if running on mobile device
+ * Check if running on mobile device or browser that blocks popups
+ * More comprehensive detection for better mobile compatibility
  */
 const isMobileDevice = (): boolean => {
   if (typeof window === 'undefined') return false;
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  
+  const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera || '';
+  
+  // Check for mobile user agents
+  const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS|FxiOS/i;
+  const isMobile = mobileRegex.test(userAgent);
+  
+  // Also check for touch device with small screen (tablets in mobile mode)
+  const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  const isSmallScreen = window.innerWidth <= 768;
+  
+  // Check for iOS Safari (which definitely needs redirect)
+  const isIOSSafari = /iP(hone|od|ad)/.test(userAgent) && /Safari/.test(userAgent);
+  
+  // Check for in-app browsers (Facebook, Instagram, etc.) which block popups
+  const isInAppBrowser = /FBAN|FBAV|Instagram|Twitter|Line|MicroMessenger/i.test(userAgent);
+  
+  console.log('[Auth] Device detection:', { isMobile, isTouchDevice, isSmallScreen, isIOSSafari, isInAppBrowser, userAgent: userAgent.substring(0, 100) });
+  
+  return isMobile || isIOSSafari || isInAppBrowser || (isTouchDevice && isSmallScreen);
 };
 
 /**
  * Sign in with Google
- * Uses redirect on mobile for better UX, popup on desktop
+ * Uses popup flow for ALL devices - redirect flow is unreliable on mobile due to 
+ * browser cookie/storage restrictions (Safari ITP, Chrome incognito, etc.)
  */
 export const signInWithGoogle = async (): Promise<AuthUser | null> => {
   const provider = new GoogleAuthProvider();
@@ -327,25 +348,13 @@ export const signInWithGoogle = async (): Promise<AuthUser | null> => {
   try {
     const isMobile = isMobileDevice();
     console.log('[Auth] Google Sign-In initiated, isMobile:', isMobile);
+    console.log('[Auth] Using popup flow (works on all modern browsers)');
 
-    if (isMobile) {
-      // Use redirect on mobile devices for better compatibility
-      console.log('[Auth] Using redirect flow for mobile');
-      
-      // Mark redirect in progress BEFORE redirecting
-      setRedirectInProgress();
-      
-      await signInWithRedirect(auth, provider);
-      // This won't execute as the page will redirect
-      return null;
-    }
-
-    // Use popup on desktop
-    console.log('[Auth] Using popup flow for desktop');
+    // Use popup for all devices - it's more reliable than redirect
     const userCredential = await signInWithPopup(auth, provider);
     const user = userCredential.user;
 
-    console.log('[Auth] Popup sign-in successful:', user.email);
+    console.log('[Auth] ✅ Popup sign-in successful:', user.email);
 
     return {
       uid: user.uid,
@@ -355,7 +364,7 @@ export const signInWithGoogle = async (): Promise<AuthUser | null> => {
       emailVerified: user.emailVerified,
     };
   } catch (error: any) {
-    console.error('[Auth] Google Sign-In error:', error.code, error.message);
+    console.error('[Auth] ❌ Google Sign-In error:', error.code, error.message);
 
     // Handle account exists with different credential
     if (error.code === 'auth/account-exists-with-different-credential') {
@@ -381,8 +390,11 @@ export const signInWithGoogle = async (): Promise<AuthUser | null> => {
       throw new Error('Sign-in was cancelled. Please try again.');
     }
 
-    // Handle popup blocked
+    // Handle popup blocked - provide helpful message for mobile
     if (error.code === 'auth/popup-blocked') {
+      if (isMobileDevice()) {
+        throw new Error('Pop-up was blocked. On mobile, tap the Google button again - your browser should now allow it.');
+      }
       throw new Error('Pop-up was blocked by your browser. Please allow pop-ups for this site and try again.');
     }
 
