@@ -20,7 +20,7 @@ export function LoginPage() {
   // Check for redirect state on mount
   useEffect(() => {
     if (isRedirectInProgress()) {
-
+      if (process.env.NODE_ENV !== 'production') console.log('[LoginPage] 🔄 Processing Google redirect...');
       setProcessingRedirect(true);
     }
   }, []);
@@ -36,7 +36,7 @@ export function LoginPage() {
 
   // Redirect if already logged in
   useEffect(() => {
-
+    if (process.env.NODE_ENV !== 'production') console.log('[LoginPage] Auth state:', { 
       currentUser: !!currentUser, 
       userProfile: !!userProfile, 
       authLoading,
@@ -45,12 +45,12 @@ export function LoginPage() {
     });
     
     if (!authLoading && !redirectLoading && currentUser && userProfile) {
-
+      if (process.env.NODE_ENV !== 'production') console.log('[LoginPage] ✅ User authenticated with profile, redirecting to dashboard');
       setProcessingRedirect(false);
       navigate('/dashboard', { replace: true });
     } else if (!authLoading && !redirectLoading && !currentUser && processingRedirect) {
       // Redirect completed but no user - something went wrong
-
+      if (process.env.NODE_ENV !== 'production') console.log('[LoginPage] ⚠️ Redirect completed but no user');
       setProcessingRedirect(false);
     }
   }, [currentUser, userProfile, authLoading, redirectLoading, navigate, processingRedirect]);
@@ -85,7 +85,7 @@ export function LoginPage() {
       // If result is null, we're redirecting (mobile flow)
       if (result) {
         // Popup flow completed successfully - auth state will update and useEffect will navigate
-
+        if (process.env.NODE_ENV !== 'production') console.log('[LoginPage] ✅ Google popup sign-in successful');
       }
       // If null, the page is redirecting to Google - don't do anything
     } catch (err: any) {
