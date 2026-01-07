@@ -165,7 +165,7 @@ class VoiceAgentService {
     const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     
     if (!SpeechRecognitionAPI) {
-      console.log('Speech recognition not supported in this browser');
+      if (process.env.NODE_ENV !== 'production') console.log('Speech recognition not supported in this browser');
       this.recognitionSupported = false;
       return;
     }
@@ -179,12 +179,12 @@ class VoiceAgentService {
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       const last = event.results.length - 1;
       const transcript = event.results[last][0].transcript.toLowerCase().trim();
-      console.log('🎤 Voice command heard:', transcript);
+      if (process.env.NODE_ENV !== 'production') console.log('🎤 Voice command heard:', transcript);
       this.processCommand(transcript);
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.log('Speech recognition error:', event.error);
+      if (process.env.NODE_ENV !== 'production') console.log('Speech recognition error:', event.error);
       if (event.error === 'no-speech' || event.error === 'audio-capture' || event.error === 'aborted') {
         if (this.isListening && this.config.voiceCommands) {
           setTimeout(() => this.restartListening(), 500);
@@ -305,9 +305,9 @@ class VoiceAgentService {
     try {
       this.recognition.start();
       this.isListening = true;
-      console.log('🎤 Listening for voice commands...');
+      if (process.env.NODE_ENV !== 'production') console.log('🎤 Listening for voice commands...');
     } catch (e) {
-      console.log('Failed to start listening:', e);
+      if (process.env.NODE_ENV !== 'production') console.log('Failed to start listening:', e);
     }
   }
 
@@ -316,7 +316,7 @@ class VoiceAgentService {
     this.isListening = false;
     try {
       this.recognition.stop();
-      console.log('🎤 Stopped listening');
+      if (process.env.NODE_ENV !== 'production') console.log('🎤 Stopped listening');
     } catch (e) {
       // Ignore errors when stopping
     }
