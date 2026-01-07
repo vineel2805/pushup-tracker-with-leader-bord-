@@ -66,7 +66,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             while (await checkUsernameExists(username) && attempts < 10) {
               username = `${baseUsername}${Math.floor(Math.random() * 10000)}`;
               attempts++;
-              if (process.env.NODE_ENV !== 'production') console.log('[AuthContext] Username collision, trying:', username);
+
             }
           } catch (usernameCheckError) {
             console.error('[AuthContext] Error checking username:', usernameCheckError);
@@ -113,7 +113,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       // Increment operation ID to invalidate any in-flight operations
       const currentOperationId = ++authOperationId;
       
-      if (process.env.NODE_ENV !== 'production') console.log('[AuthContext] Auth state changed:', user?.email || 'null');
+
       
       // Update refs immediately (synchronous)
       currentUserRef.current = user;
@@ -130,11 +130,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           // Check if this operation is still valid and component is mounted
           if (currentOperationId !== authOperationId || !isMountedRef.current) return;
           
-          if (process.env.NODE_ENV !== 'production') console.log('[AuthContext] User profile exists:', !!profile);
+
           
           // Create profile if it doesn't exist (for Google sign-in users)
           if (!profile && user.email) {
-            if (process.env.NODE_ENV !== 'production') console.log('[AuthContext] Creating new profile for:', user.email);
+
             
             let username = user.displayName || user.email.split('@')[0];
             // Clean username - remove special characters and spaces
@@ -152,7 +152,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
               while (await checkUsernameExists(username) && attempts < 10) {
                 username = `${baseUsername}${Math.floor(Math.random() * 10000)}`;
                 attempts++;
-                if (process.env.NODE_ENV !== 'production') console.log('[AuthContext] Username collision, trying:', username);
+
               }
             } catch (usernameCheckError) {
               console.error('[AuthContext] Error checking username:', usernameCheckError);
@@ -173,7 +173,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             if (currentOperationId !== authOperationId || !isMountedRef.current) return;
             
             profile = await getUserProfile(user.uid);
-            if (process.env.NODE_ENV !== 'production') console.log('[AuthContext] ✅ Profile created successfully:', profile?.username);
+
           }
           
           // Final check before setting state

@@ -327,7 +327,7 @@ const isMobileDevice = (): boolean => {
   // Check for in-app browsers (Facebook, Instagram, etc.) which block popups
   const isInAppBrowser = /FBAN|FBAV|Instagram|Twitter|Line|MicroMessenger/i.test(userAgent);
   
-  if (process.env.NODE_ENV !== 'production') console.log('[Auth] Device detection:', { isMobile, isTouchDevice, isSmallScreen, isIOSSafari, isInAppBrowser, userAgent: userAgent.substring(0, 100) });
+
   
   return isMobile || isIOSSafari || isInAppBrowser || (isTouchDevice && isSmallScreen);
 };
@@ -347,14 +347,13 @@ export const signInWithGoogle = async (): Promise<AuthUser | null> => {
 
   try {
     const isMobile = isMobileDevice();
-    if (process.env.NODE_ENV !== 'production') console.log('[Auth] Google Sign-In initiated, isMobile:', isMobile);
-    if (process.env.NODE_ENV !== 'production') console.log('[Auth] Using popup flow (works on all modern browsers)');
+
 
     // Use popup for all devices - it's more reliable than redirect
     const userCredential = await signInWithPopup(auth, provider);
     const user = userCredential.user;
 
-    if (process.env.NODE_ENV !== 'production') console.log('[Auth] ✅ Popup sign-in successful:', user.email);
+
 
     return {
       uid: user.uid,
@@ -434,7 +433,7 @@ export const signInWithGoogle = async (): Promise<AuthUser | null> => {
 export const handleGoogleRedirectResult = async (): Promise<AuthUser | null> => {
   try {
     const wasRedirecting = isRedirectInProgress();
-    if (process.env.NODE_ENV !== 'production') console.log('[Auth] Checking for redirect result, wasRedirecting:', wasRedirecting);
+
     
     const result = await getRedirectResult(auth);
     
@@ -442,7 +441,7 @@ export const handleGoogleRedirectResult = async (): Promise<AuthUser | null> => 
     clearRedirectState();
     
     if (result && result.user) {
-      if (process.env.NODE_ENV !== 'production') console.log('[Auth] ✅ Redirect result found:', result.user.email);
+
       
       return {
         uid: result.user.uid,
@@ -458,7 +457,7 @@ export const handleGoogleRedirectResult = async (): Promise<AuthUser | null> => 
       console.warn('[Auth] ⚠️ Redirect was in progress but no result found');
     }
     
-    if (process.env.NODE_ENV !== 'production') console.log('[Auth] No redirect result found');
+
     return null;
   } catch (error: any) {
     console.error('[Auth] ❌ Redirect result error:', error.code, error.message);
