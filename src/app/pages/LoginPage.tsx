@@ -20,7 +20,7 @@ export function LoginPage() {
   // Check for redirect state on mount
   useEffect(() => {
     if (isRedirectInProgress()) {
-      console.log('[LoginPage] 🔄 Processing Google redirect...');
+      //console.log('[LoginPage] 🔄 Processing Google redirect...');
       setProcessingRedirect(true);
     }
   }, []);
@@ -36,21 +36,21 @@ export function LoginPage() {
 
   // Redirect if already logged in
   useEffect(() => {
-    console.log('[LoginPage] Auth state:', { 
-      currentUser: !!currentUser, 
-      userProfile: !!userProfile, 
-      authLoading,
-      redirectLoading,
-      processingRedirect 
-    });
+    //console.log('[LoginPage] Auth state:', { 
+      //currentUser: !!currentUser, 
+      //userProfile: !!userProfile, 
+      //authLoading,
+      //redirectLoading,
+      //processingRedirect 
+    //});
     
     if (!authLoading && !redirectLoading && currentUser && userProfile) {
-      console.log('[LoginPage] ✅ User authenticated with profile, redirecting to dashboard');
+     // console.log('[LoginPage] ✅ User authenticated with profile, redirecting to dashboard');
       setProcessingRedirect(false);
       navigate('/dashboard', { replace: true });
     } else if (!authLoading && !redirectLoading && !currentUser && processingRedirect) {
       // Redirect completed but no user - something went wrong
-      console.log('[LoginPage] ⚠️ Redirect completed but no user');
+      //console.log('[LoginPage] ⚠️ Redirect completed but no user');
       setProcessingRedirect(false);
     }
   }, [currentUser, userProfile, authLoading, redirectLoading, navigate, processingRedirect]);
@@ -85,7 +85,7 @@ export function LoginPage() {
       // If result is null, we're redirecting (mobile flow)
       if (result) {
         // Popup flow completed successfully - auth state will update and useEffect will navigate
-        console.log('[LoginPage] ✅ Google popup sign-in successful');
+       // console.log('[LoginPage] ✅ Google popup sign-in successful');
       }
       // If null, the page is redirecting to Google - don't do anything
     } catch (err: any) {

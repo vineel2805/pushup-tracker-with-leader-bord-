@@ -25,7 +25,7 @@ export function SignupPage() {
   // Check for redirect state on mount
   useEffect(() => {
     if (isRedirectInProgress()) {
-      console.log('[SignupPage] 🔄 Processing Google redirect...');
+     // console.log('[SignupPage] 🔄 Processing Google redirect...');
       setProcessingRedirect(true);
     }
   }, []);
@@ -41,21 +41,21 @@ export function SignupPage() {
 
   // Redirect if already logged in
   useEffect(() => {
-    console.log('[SignupPage] Auth state:', { 
-      currentUser: !!currentUser, 
-      userProfile: !!userProfile, 
-      authLoading,
-      redirectLoading,
-      processingRedirect 
-    });
+   // console.log('[SignupPage] Auth state:', { 
+     // currentUser: !!currentUser, 
+      //userProfile: !!userProfile, 
+     // authLoading,
+      //redirectLoading,
+      //processingRedirect 
+    //});
     
     if (!authLoading && !redirectLoading && currentUser && userProfile) {
-      console.log('[SignupPage] ✅ User authenticated with profile, redirecting to dashboard');
+      //console.log('[SignupPage] ✅ User authenticated with profile, redirecting to dashboard');
       setProcessingRedirect(false);
       navigate('/dashboard', { replace: true });
     } else if (!authLoading && !redirectLoading && !currentUser && processingRedirect) {
       // Redirect completed but no user - something went wrong
-      console.log('[SignupPage] ⚠️ Redirect completed but no user');
+      //console.log('[SignupPage] ⚠️ Redirect completed but no user');
       setProcessingRedirect(false);
     }
   }, [currentUser, userProfile, authLoading, redirectLoading, navigate, processingRedirect]);
@@ -89,7 +89,7 @@ export function SignupPage() {
     if (value.length > 0) {
       const validation = validatePasswordStrength(value);
       if (!validation.valid) {
-        setPasswordError(validation.error);
+        setPasswordError(validation.error || 'Password does not meet requirements.');
       }
     }
   };
@@ -164,7 +164,7 @@ export function SignupPage() {
       // If result is null, we're redirecting (mobile flow)
       if (result) {
         // Popup flow completed successfully - auth state will update and useEffect will navigate
-        console.log('[SignupPage] ✅ Google popup sign-in successful');
+       // console.log('[SignupPage] ✅ Google popup sign-in successful');
       }
       // If null, the page is redirecting to Google - don't do anything
     } catch (err: any) {
