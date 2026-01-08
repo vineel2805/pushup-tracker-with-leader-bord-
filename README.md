@@ -1,10 +1,10 @@
-# Track & Grow 🌱
+# Track & Grow 
 
 An AI-powered push-up counter with real-time pose detection, voice commands, audio feedback, and social features. Built with React, TypeScript, MediaPipe, and Firebase.
 
 ![Track & Grow](https://img.shields.io/badge/version-2.1.0-green) ![React](https://img.shields.io/badge/React-18-blue) ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue) ![Firebase](https://img.shields.io/badge/Firebase-10-orange)
 
-## 🎯 Features
+##  Features
 
 ### Core Features
 - **AI Push-Up Detection** - Real-time rep counting using MediaPipe pose detection
@@ -49,7 +49,7 @@ During tracking, see live metrics:
 - **Collapsible Sidebar** - Clean navigation with expand/collapse toggle
 - **Responsive Design** - Works seamlessly on desktop and mobile
 
-## 🏋️ How Push-Up Detection Works
+##  How Push-Up Detection Works
 
 The detection uses a two-factor validation system:
 
@@ -85,7 +85,7 @@ The detection uses a two-factor validation system:
 | **Forms** | React Hook Form |
 | **Routing** | React Router DOM v7 |
 
-## 🚀 Getting Started
+##  Getting Started
 
 ### Prerequisites
 
@@ -137,7 +137,7 @@ The detection uses a two-factor validation system:
 6. **Open your browser:**
    Navigate to [http://localhost:5173](http://localhost:5173)
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 src/
@@ -167,7 +167,7 @@ src/
 └── public/                  # Static assets
 ```
 
-## 📜 Available Scripts
+##  Available Scripts
 
 | Command | Description |
 |---------|-------------|
@@ -176,7 +176,7 @@ src/
 | `pnpm preview` | Preview production build |
 | `pnpm lint` | Run ESLint |
 
-## 🚀 Deployment
+##  Deployment
 
 ### Deploy to Vercel (Recommended)
 
@@ -194,21 +194,21 @@ firebase init hosting
 firebase deploy
 ```
 
-## 📚 Documentation
+##  Documentation
 
 - [Firebase Setup Guide](FIREBASE_SETUP.md) - Complete Firebase configuration
 - [API Runbook](API_RUNBOOK.md) - Avatar upload API documentation
 - [Firebase Rules](FIREBASE_RULES.txt) - Firestore security rules
 - [Development Guidelines](guidelines/Guidelines.md) - Code style and best practices
 
-## 🔒 Security Notes
+##  Security Notes
 
 - Never commit `.env` files to version control
 - Use Firebase security rules to protect user data
 - Enable email verification for new accounts
 - Regularly update dependencies for security patches
 
-## 🤝 Contributing
+##  Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -216,19 +216,19 @@ firebase deploy
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 👨‍💻 Author
+## Author
 
 **Vineel** - [GitHub](https://github.com/vineel2805)
 
-## 📝 Changelog
+## Changelog
 
 ### v2.1.0 (January 2026)
-- ✨ Added face motion validation to prevent false rep counts
-- ✨ Auto-pause when face/pose is lost for 2+ seconds
-- ✨ Real-time debug dashboard showing state, angle, face visibility, and movement
-- 🎨 Responsive skeleton point sizes for mobile
-- ⚡ Optimized canvas rendering with single save/restore
-- 🐛 Fixed face landmark tracking for accurate motion detection
+-  Added face motion validation to prevent false rep counts
+-  Auto-pause when face/pose is lost for 2+ seconds
+-  Real-time debug dashboard showing state, angle, face visibility, and movement
+-  Responsive skeleton point sizes for mobile
+-  Optimized canvas rendering with single save/restore
+-  Fixed face landmark tracking for accurate motion detection
 
 ### v2.0.0
 - Initial release with AI push-up detection
